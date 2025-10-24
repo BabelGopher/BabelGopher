@@ -1,161 +1,278 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { useLiveKit } from '@/hooks/useLiveKit';
-import { fetchLiveKitToken } from '@/lib/api';
-import { LanguageSelector } from '@/components/LanguageSelector';
+import Image from 'next/image';
+import { Mic, Volume2, User, Menu, X } from 'lucide-react';
+import { FR, TH, NL, KR, AL } from 'country-flag-icons/react/3x2';
+import { Circle, Triangle, Square } from '../components/shapes';
+import { SpeechBubble } from '../components/landing/SpeechBubble';
+
+const LANGUAGE_FLAGS = [
+  { code: 'fr', name: 'French', flag: FR },
+  { code: 'th', name: 'Thai', flag: TH },
+  { code: 'nl', name: 'Dutch', flag: NL },
+  { code: 'kr', name: 'Korean', flag: KR },
+  { code: 'al', name: 'Albanian', flag: AL },
+];
 
 export default function LobbyPage() {
-  const [name, setName] = useState('');
-  const [roomName, setRoomName] = useState('');
-  const [targetLanguage, setTargetLanguage] = useState('en');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const { connect } = useLiveKit();
   const router = useRouter();
+  const [name, setName] = useState('');
+  const [roomCode, setRoomCode] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('fr');
+  const [loading, setLoading] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleJoin = async () => {
-    // Validate inputs
-    if (!name.trim()) {
-      setError('Please enter your name');
-      return;
-    }
-
-    if (!roomName.trim()) {
-      setError('Please enter a room name');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Get LiveKit token from backend
-      const token = await fetchLiveKitToken(name.trim(), roomName.trim());
-
-      // Get LiveKit URL from environment
-      const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
-      if (!livekitUrl) {
-        throw new Error('NEXT_PUBLIC_LIVEKIT_URL environment variable is not configured');
-      }
-
-      // Connect to LiveKit room
-      await connect(token, livekitUrl);
-
-      // Navigate to room page with language parameter
-      router.push(`/room/${encodeURIComponent(roomName.trim())}?lang=${targetLanguage}`);
-    } catch (err) {
-      console.error('Failed to join room:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to join room';
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !isLoading) {
-      handleJoin();
-    }
+  const handleJoin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      router.push(`/room/${roomCode || 'demo'}?name=${encodeURIComponent(name || 'Guest')}&lang=${selectedLanguage}`);
+    }, 1000);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">BabelGopher</h1>
-          <p className="text-gray-600">Real-time multilingual translation</p>
-        </div>
+    <main className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-purple-400 via-pink-300 to-blue-300">
+      {/* Background Image - Tower of Babel */}
+      <div
+        className="absolute inset-0 w-full h-full bg-contain bg-center bg-no-repeat"
+        style={{
+          backgroundImage: 'url(/images/babel-tower-bg.jpg)',
+        }}
+      />
 
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-              Your Name
-            </label>
-            <input
-              id="name"
-              type="text"
-              placeholder="Enter your name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyPress={handleKeyPress}
-              disabled={isLoading}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-              aria-label="Your name"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="roomName" className="block text-sm font-medium text-gray-700 mb-2">
-              Room Name
-            </label>
-            <input
-              id="roomName"
-              type="text"
-              placeholder="Enter room name"
-              value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
-              onKeyPress={handleKeyPress}
-              disabled={isLoading}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-              aria-label="Room name"
-            />
-          </div>
-
-          {/* Language Selector */}
-          <LanguageSelector
-            selectedLanguage={targetLanguage}
-            onChange={setTargetLanguage}
-          />
-
-          <button
-            onClick={handleJoin}
-            disabled={isLoading}
-            className="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            aria-label="Join room"
-          >
-            {isLoading ? (
-              <span className="flex items-center justify-center">
-                <svg
-                  className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                Connecting...
-              </span>
-            ) : (
-              'Join Room'
-            )}
-          </button>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg" role="alert">
-              <p className="text-sm">{error}</p>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <p className="text-xs text-gray-500 text-center">
-            Chrome Built-in AI Challenge 2025
-          </p>
-        </div>
+      {/* Floating Geometric Shapes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-5">
+        <Triangle className="absolute top-[10%] right-[15%] w-4 h-4 md:w-6 md:h-6 text-blue-500 animate-float-slow hidden md:block" />
+        <Circle className="absolute top-[5%] left-[5%] w-8 h-8 md:w-12 md:h-12 text-purple-400 opacity-60 hidden lg:block" style={{background: 'conic-gradient(from 0deg, #ff0080, #00ffff, #ff0080)'}} />
+        <Square className="absolute top-[35%] left-[8%] w-6 h-6 md:w-8 md:h-8 text-yellow-400 rotate-45 animate-float-reverse hidden md:block" />
+        <Triangle className="absolute top-[40%] left-[12%] w-6 h-6 md:w-8 md:h-8 text-blue-400 rotate-180 animate-float-fast hidden lg:block" />
+        <div className="absolute top-[45%] right-[10%] w-2 h-2 md:w-3 md:h-3 rounded-full bg-pink-400 hidden md:block" />
+        <div className="absolute bottom-[20%] left-[3%] w-10 h-10 md:w-16 md:h-16 hidden lg:block" style={{background: 'conic-gradient(from 45deg, #ff0080, #ffff00, #ff0080)', borderRadius: '50%'}} />
+        <Triangle className="absolute bottom-[15%] left-[8%] w-4 h-4 md:w-6 md:h-6 text-orange-400 animate-float hidden md:block" />
+        <Square className="absolute bottom-[25%] right-[5%] w-6 h-6 md:w-10 md:h-10 text-pink-400 rotate-12 hidden lg:block" />
+        <div className="absolute bottom-[10%] right-[12%] w-3 h-3 md:w-5 md:h-5 rounded-full bg-orange-400 animate-float-slow hidden md:block" />
       </div>
-    </div>
+
+      {/* Top Navigation Bar */}
+      <nav className="relative z-20 flex items-center justify-between px-4 md:px-8 py-3 md:py-4 bg-gradient-to-b from-blue-500/90 to-blue-500/70 backdrop-blur-sm">
+        <div className="flex items-center gap-4 md:gap-12">
+          <h1 className="font-display text-xl md:text-2xl lg:text-3xl text-white">BabelGopher</h1>
+
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex gap-4 lg:gap-8">
+            <button className="text-white font-semibold text-sm lg:text-base hover:text-blue-100 transition-colors">Home</button>
+            <button className="text-white font-semibold text-sm lg:text-base hover:text-blue-100 transition-colors">About</button>
+            <button className="text-white font-semibold text-sm lg:text-base hover:text-blue-100 transition-colors">Services</button>
+          </div>
+        </div>
+
+        {/* Mobile Menu Button */}
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="md:hidden text-white z-30"
+        >
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+
+        {/* Desktop User Button */}
+        <button className="hidden md:flex items-center gap-2 bg-white/90 hover:bg-white px-3 lg:px-5 py-2 rounded-full text-blue-600 font-semibold text-sm lg:text-base transition-colors">
+          <User size={16} className="lg:w-[18px] lg:h-[18px]" />
+          <span>User 751</span>
+        </button>
+
+        {/* Mobile Menu Overlay */}
+        {mobileMenuOpen && (
+          <div className="absolute top-full left-0 right-0 bg-blue-600/95 backdrop-blur-sm md:hidden z-20 py-4 px-6 space-y-4">
+            <button className="block w-full text-left text-white font-semibold py-2">Home</button>
+            <button className="block w-full text-left text-white font-semibold py-2">About</button>
+            <button className="block w-full text-left text-white font-semibold py-2">Services</button>
+            <button className="flex items-center gap-2 bg-white text-blue-600 font-semibold py-2 px-4 rounded-full mt-4">
+              <User size={16} />
+              <span>User 751</span>
+            </button>
+          </div>
+        )}
+      </nav>
+
+      {/* Main Content Area */}
+      <div className="relative z-10 h-full flex flex-col items-center justify-start">
+
+        {/* Speech Bubbles Container */}
+        <div className="relative w-full max-w-2xl mx-auto" style={{ height: '45vh', minHeight: '400px' }}>
+          {/* Speech Bubbles positioned around Gopher */}
+          <SpeechBubble
+            bgColor="#86E37D"
+            textColor="#000000"
+            tailDirection="bottom-right"
+            className="absolute top-[18%] left-[38%] z-30 text-sm md:text-base w-fit"
+          >
+            Hello
+          </SpeechBubble>
+
+          <SpeechBubble
+            bgColor="#FFA860"
+            textColor="#FFFFFF"
+            tailDirection="bottom-left"
+            className="absolute top-[15%] right-[18%] z-30 text-sm md:text-base w-fit"
+          >
+            니하오
+          </SpeechBubble>
+
+          <SpeechBubble
+            bgColor="#6EE7B7"
+            textColor="#000000"
+            tailDirection="bottom-left"
+            className="absolute top-[32%] right-[15%] z-30 text-sm md:text-base w-fit"
+          >
+            안녕
+          </SpeechBubble>
+
+          <SpeechBubble
+            bgColor="#F472B6"
+            textColor="#FFFFFF"
+            tailDirection="top-right"
+            className="absolute top-[35%] left-[30%] z-30 text-sm md:text-base w-fit"
+          >
+            Hola
+          </SpeechBubble>
+
+          <SpeechBubble
+            bgColor="#FCD34D"
+            textColor="#000000"
+            tailDirection="top-right"
+            className="absolute top-[52%] left-[34%] z-30 text-sm md:text-base w-fit"
+          >
+            こんにちは
+          </SpeechBubble>
+
+          <SpeechBubble
+            bgColor="#A78BFA"
+            textColor="#FFFFFF"
+            tailDirection="top-left"
+            className="absolute top-[50%] right-[12%] z-30 text-sm md:text-base w-fit"
+          >
+            Bonjour
+          </SpeechBubble>
+        </div>
+
+        {/* Form Card and Mic Buttons Container - Positioned lower */}
+        <div className="relative w-full max-w-5xl mx-auto flex flex-col lg:flex-row items-center justify-center gap-4 md:gap-8 px-4 mt-8">
+
+          {/* Left Mic Button - Hidden on mobile, shown on desktop */}
+          <div className="hidden lg:flex flex-col items-center gap-3 order-1">
+            <button
+              type="button"
+              onClick={() => alert('Test your microphone')}
+              className="w-20 h-20 xl:w-24 xl:h-24 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 border-4 border-orange-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
+            >
+              <Mic size={32} className="xl:w-9 xl:h-9 text-white" />
+            </button>
+            <span className="text-white font-semibold text-xs xl:text-sm drop-shadow-lg text-center">Test Your<br/>Your Mic</span>
+          </div>
+
+          {/* Blue Form Card */}
+          <div className="w-full max-w-md lg:w-[450px] bg-blue-500 rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-2xl order-2">
+            <form onSubmit={handleJoin} className="space-y-4 md:space-y-5">
+
+              {/* Your Name Input */}
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your Name"
+                className="w-full px-4 py-3 md:px-5 md:py-4 rounded-xl bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-300 text-base md:text-lg"
+                required
+              />
+
+              {/* Room Code Input */}
+              <input
+                type="text"
+                value={roomCode}
+                onChange={(e) => setRoomCode(e.target.value)}
+                placeholder="Room Code"
+                className="w-full px-4 py-3 md:px-5 md:py-4 rounded-xl bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-300 text-base md:text-lg"
+                required
+              />
+
+              {/* Language Selector with Flags */}
+              <div className="relative">
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                  className="w-full px-4 py-3 md:px-5 md:py-4 rounded-xl bg-white text-gray-700 appearance-none focus:outline-none focus:ring-4 focus:ring-blue-300 cursor-pointer text-base md:text-lg pr-12"
+                >
+                  <option value="">I want to hear in:</option>
+                  {LANGUAGE_FLAGS.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+                {/* Flag Icons Display */}
+                <div className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 flex gap-1 pointer-events-none">
+                  {LANGUAGE_FLAGS.map((lang) => {
+                    const FlagComponent = lang.flag;
+                    return (
+                      <FlagComponent key={lang.code} className="w-4 h-3 md:w-5 md:h-4 rounded-sm" />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Join Conference Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className={`w-full bg-gradient-to-r from-pink-500 to-pink-600 text-white font-bold py-3 md:py-4 rounded-full text-lg md:text-xl shadow-lg transition-all ${
+                  loading ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-xl hover:scale-105'
+                }`}
+              >
+                {loading ? 'Connecting...' : 'Join Conference'}
+              </button>
+            </form>
+          </div>
+
+          {/* Right Speaker Buttons - Hidden on mobile, shown on desktop */}
+          <div className="hidden lg:flex flex-col gap-4 order-3">
+            <button
+              type="button"
+              className="w-20 h-20 xl:w-24 xl:h-24 rounded-full bg-gradient-to-br from-teal-300 to-teal-400 border-4 border-teal-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
+            >
+              <Volume2 size={32} className="xl:w-9 xl:h-9 text-white" />
+            </button>
+            <button
+              type="button"
+              className="w-20 h-20 xl:w-24 xl:h-24 rounded-full bg-gradient-to-br from-pink-300 to-pink-400 border-4 border-pink-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
+            >
+              <Volume2 size={32} className="xl:w-9 xl:h-9 text-white" />
+            </button>
+          </div>
+
+          {/* Mobile Audio Buttons - Shown only on mobile */}
+          <div className="flex lg:hidden items-center justify-center gap-4 mt-4 order-4">
+            <button
+              type="button"
+              onClick={() => alert('Test your microphone')}
+              className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 border-3 border-orange-200 flex items-center justify-center shadow-xl"
+            >
+              <Mic size={24} className="text-white" />
+            </button>
+            <button
+              type="button"
+              className="w-16 h-16 rounded-full bg-gradient-to-br from-teal-300 to-teal-400 border-3 border-teal-200 flex items-center justify-center shadow-xl"
+            >
+              <Volume2 size={24} className="text-white" />
+            </button>
+            <button
+              type="button"
+              className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-300 to-pink-400 border-3 border-pink-200 flex items-center justify-center shadow-xl"
+            >
+              <Volume2 size={24} className="text-white" />
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </main>
   );
 }
