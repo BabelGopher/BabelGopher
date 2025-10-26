@@ -6,6 +6,7 @@ interface SpeechBubbleProps {
   textColor?: string;
   tailDirection: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   className?: string;
+  style?: React.CSSProperties;
 }
 
 export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
@@ -14,6 +15,7 @@ export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
   textColor = 'white',
   tailDirection,
   className = '',
+  style,
 }) => {
   // Tail positioning based on direction
   const tailPositions = {
@@ -32,7 +34,7 @@ export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
   };
 
   return (
-    <div className={`relative inline-block ${className}`}>
+    <div className={`relative inline-block ${className}`} style={style}>
       <div
         className="px-3 py-1.5 md:px-4 md:py-2 rounded-xl shadow-lg font-bold relative z-10 whitespace-nowrap border-2 border-black"
         style={{ backgroundColor: bgColor, color: textColor }}

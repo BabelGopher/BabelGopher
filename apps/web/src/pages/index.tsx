@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import Image from 'next/image';
 import { Mic, Volume2, User, Menu, X } from 'lucide-react';
 import { FR, TH, NL, KR, AL } from 'country-flag-icons/react/3x2';
 import { Circle, Triangle, Square } from '../components/shapes';
@@ -98,61 +97,73 @@ export default function LobbyPage() {
       <div className="relative z-10 h-full flex flex-col items-center justify-start">
 
         {/* Speech Bubbles Container */}
-        <div className="relative w-full max-w-2xl mx-auto" style={{ height: '45vh', minHeight: '400px' }}>
+        <div className="relative w-full h-[50vh] flex items-center justify-center">
           {/* Speech Bubbles positioned around Gopher */}
-          <SpeechBubble
-            bgColor="#86E37D"
-            textColor="#000000"
-            tailDirection="bottom-right"
-            className="absolute top-[18%] left-[38%] z-30 text-sm md:text-base w-fit"
-          >
-            Hello
-          </SpeechBubble>
+          <div className="absolute top-[18%] left-[32%] z-30 animate-float" style={{ animationDelay: '0s' }}>
+            <SpeechBubble
+              bgColor="#86E37D"
+              textColor="#000000"
+              tailDirection="bottom-right"
+              className="text-sm md:text-base w-fit"
+            >
+              Hello
+            </SpeechBubble>
+          </div>
 
-          <SpeechBubble
-            bgColor="#FFA860"
-            textColor="#FFFFFF"
-            tailDirection="bottom-left"
-            className="absolute top-[15%] right-[18%] z-30 text-sm md:text-base w-fit"
-          >
-            니하오
-          </SpeechBubble>
+          <div className="absolute top-[15%] right-[30%] z-30 animate-float-slow" style={{ animationDelay: '1s' }}>
+            <SpeechBubble
+              bgColor="#FFA860"
+              textColor="#FFFFFF"
+              tailDirection="bottom-left"
+              className="text-sm md:text-base w-fit"
+            >
+              你好
+            </SpeechBubble>
+          </div>
 
-          <SpeechBubble
-            bgColor="#6EE7B7"
-            textColor="#000000"
-            tailDirection="bottom-left"
-            className="absolute top-[32%] right-[15%] z-30 text-sm md:text-base w-fit"
-          >
-            안녕
-          </SpeechBubble>
+          <div className="absolute top-[42%] right-[24%] z-30 animate-float-fast" style={{ animationDelay: '0.5s' }}>
+            <SpeechBubble
+              bgColor="#6EE7B7"
+              textColor="#000000"
+              tailDirection="bottom-left"
+              className="text-sm md:text-base w-fit"
+            >
+              안녕
+            </SpeechBubble>
+          </div>
 
-          <SpeechBubble
-            bgColor="#F472B6"
-            textColor="#FFFFFF"
-            tailDirection="top-right"
-            className="absolute top-[35%] left-[30%] z-30 text-sm md:text-base w-fit"
-          >
-            Hola
-          </SpeechBubble>
+          <div className="absolute top-[38%] left-[27%] z-30 animate-float-reverse" style={{ animationDelay: '2s' }}>
+            <SpeechBubble
+              bgColor="#F472B6"
+              textColor="#FFFFFF"
+              tailDirection="top-right"
+              className="text-sm md:text-base w-fit"
+            >
+              Hola
+            </SpeechBubble>
+          </div>
 
-          <SpeechBubble
-            bgColor="#FCD34D"
-            textColor="#000000"
-            tailDirection="top-right"
-            className="absolute top-[52%] left-[34%] z-30 text-sm md:text-base w-fit"
-          >
-            こんにちは
-          </SpeechBubble>
+          <div className="absolute top-[62%] left-[34%] z-30 animate-float" style={{ animationDelay: '1.5s' }}>
+            <SpeechBubble
+              bgColor="#FCD34D"
+              textColor="#000000"
+              tailDirection="top-right"
+              className="text-sm md:text-base w-fit"
+            >
+              こんにちは
+            </SpeechBubble>
+          </div>
 
-          <SpeechBubble
-            bgColor="#A78BFA"
-            textColor="#FFFFFF"
-            tailDirection="top-left"
-            className="absolute top-[50%] right-[12%] z-30 text-sm md:text-base w-fit"
-          >
-            Bonjour
-          </SpeechBubble>
+          <div className="absolute top-[60%] right-[27%] z-30 animate-float-slow" style={{ animationDelay: '2.5s' }}>
+            <SpeechBubble
+              bgColor="#A78BFA"
+              textColor="#FFFFFF"
+              tailDirection="top-left"
+              className="text-sm md:text-base w-fit"
+            >
+              Bonjour
+            </SpeechBubble>
+          </div>
         </div>
 
         {/* Form Card and Mic Buttons Container - Positioned lower */}

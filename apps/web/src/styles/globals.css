@@ -9,6 +9,41 @@ body {
 @layer utilities {
   /* Custom animations for BabelGopher */
 
+  /* Floating animations for speech bubbles */
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(-15px);
+    }
+    50% {
+      transform: translateY(15px);
+    }
+  }
+
+  @keyframes floatReverse {
+    0%, 100% {
+      transform: translateY(15px);
+    }
+    50% {
+      transform: translateY(-15px);
+    }
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-float-fast {
+    animation: float 2.5s ease-in-out infinite;
+  }
+
+  .animate-float-slow {
+    animation: float 4s ease-in-out infinite;
+  }
+
+  .animate-float-reverse {
+    animation: floatReverse 3.5s ease-in-out infinite;
+  }
+
   /* Speaking indicator pulse animation */
   @keyframes pulse {
     0%, 100% {
