@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { Mic, Volume2, User, Menu, X } from 'lucide-react';
-import { FR, TH, NL, KR, AL } from 'country-flag-icons/react/3x2';
+import { Mic, Volume2 } from 'lucide-react';
+import { FR, TH, NL, KR, AL, US } from 'country-flag-icons/react/3x2';
 import { Circle, Triangle, Square } from '../components/shapes';
 import { SpeechBubble } from '../components/landing/SpeechBubble';
+import { MicrophoneSettingsModal } from '../components/audio/MicrophoneSettingsModal';
+import { SpeakerSettingsModal } from '../components/audio/SpeakerSettingsModal';
 
 const LANGUAGE_FLAGS = [
+  { code: 'en', name: 'English', flag: US },
   { code: 'fr', name: 'French', flag: FR },
   { code: 'th', name: 'Thai', flag: TH },
   { code: 'nl', name: 'Dutch', flag: NL },
@@ -17,9 +20,15 @@ export default function LobbyPage() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
-  const [selectedLanguage, setSelectedLanguage] = useState('fr');
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [loading, setLoading] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Audio settings state
+  const [showMicSettings, setShowMicSettings] = useState(false);
+  const [selectedMic, setSelectedMic] = useState('default');
+  const [showSpeakerSettings, setShowSpeakerSettings] = useState(false);
+  const [selectedSpeaker, setSelectedSpeaker] = useState('default');
+  const [speakerVolume, setSpeakerVolume] = useState(80);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,10 +39,10 @@ export default function LobbyPage() {
   };
 
   return (
-    <main className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-purple-400 via-pink-300 to-blue-300">
-      {/* Background Image - Tower of Babel */}
+    <main className="relative w-full h-screen overflow-hidden bg-gradient-to-b from-orange-100 via-pink-100 to-rose-200 md:bg-gradient-to-br md:from-purple-400 md:via-pink-300 md:to-blue-300">
+      {/* Background Image - Tower of Babel - Hidden on mobile */}
       <div
-        className="absolute inset-0 w-full h-full bg-contain bg-center bg-no-repeat"
+        className="hidden md:block absolute inset-0 w-full h-full bg-contain bg-center bg-no-repeat"
         style={{
           backgroundImage: 'url(/images/babel-tower-bg.jpg)',
         }}
@@ -53,51 +62,25 @@ export default function LobbyPage() {
       </div>
 
       {/* Top Navigation Bar */}
-      <nav className="relative z-20 flex items-center justify-between px-4 md:px-8 py-3 md:py-4 bg-gradient-to-b from-blue-500/90 to-blue-500/70 backdrop-blur-sm">
-        <div className="flex items-center gap-4 md:gap-12">
-          <h1 className="font-display text-xl md:text-2xl lg:text-3xl text-white">BabelGopher</h1>
-
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex gap-4 lg:gap-8">
-            <button className="text-white font-semibold text-sm lg:text-base hover:text-blue-100 transition-colors">Home</button>
-            <button className="text-white font-semibold text-sm lg:text-base hover:text-blue-100 transition-colors">About</button>
-            <button className="text-white font-semibold text-sm lg:text-base hover:text-blue-100 transition-colors">Services</button>
-          </div>
-        </div>
-
-        {/* Mobile Menu Button */}
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden text-white z-30"
-        >
-          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-
-        {/* Desktop User Button */}
-        <button className="hidden md:flex items-center gap-2 bg-white/90 hover:bg-white px-3 lg:px-5 py-2 rounded-full text-blue-600 font-semibold text-sm lg:text-base transition-colors">
-          <User size={16} className="lg:w-[18px] lg:h-[18px]" />
-          <span>User 751</span>
-        </button>
-
-        {/* Mobile Menu Overlay */}
-        {mobileMenuOpen && (
-          <div className="absolute top-full left-0 right-0 bg-blue-600/95 backdrop-blur-sm md:hidden z-20 py-4 px-6 space-y-4">
-            <button className="block w-full text-left text-white font-semibold py-2">Home</button>
-            <button className="block w-full text-left text-white font-semibold py-2">About</button>
-            <button className="block w-full text-left text-white font-semibold py-2">Services</button>
-            <button className="flex items-center gap-2 bg-white text-blue-600 font-semibold py-2 px-4 rounded-full mt-4">
-              <User size={16} />
-              <span>User 751</span>
-            </button>
-          </div>
-        )}
+      <nav className="relative z-20 flex items-center px-4 md:px-8 py-3 md:py-4 bg-gradient-to-b from-orange-50/80 to-transparent md:from-blue-500/90 md:to-blue-500/70 backdrop-blur-md md:backdrop-blur-sm">
+        <h1 className="font-display text-xl md:text-2xl lg:text-3xl text-rose-800 md:text-white">BabelGopher</h1>
       </nav>
 
       {/* Main Content Area */}
-      <div className="relative z-10 h-full flex flex-col items-center justify-start">
+      <div className="relative z-10 h-full flex flex-col items-center justify-end pb-8 md:justify-start md:pb-0">
 
-        {/* Speech Bubbles Container */}
-        <div className="relative w-full h-[50vh] flex items-center justify-center">
+        {/* Mobile Background Gopher - Hero element */}
+        <div className="md:hidden absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none">
+          <img
+            src="/images/transparant-gopher.png"
+            alt=""
+            className="w-full max-w-lg opacity-55"
+            style={{ transform: 'translateY(-25%)' }}
+          />
+        </div>
+
+        {/* Speech Bubbles Container - Hidden on mobile */}
+        <div className="hidden md:block relative w-full h-[50vh]">
           {/* Speech Bubbles positioned around Gopher */}
           <div className="absolute top-[18%] left-[32%] z-30 animate-float" style={{ animationDelay: '0s' }}>
             <SpeechBubble
@@ -166,23 +149,41 @@ export default function LobbyPage() {
           </div>
         </div>
 
-        {/* Form Card and Mic Buttons Container - Positioned lower */}
-        <div className="relative w-full max-w-5xl mx-auto flex flex-col lg:flex-row items-center justify-center gap-4 md:gap-8 px-4 mt-8">
+        {/* Form Card and Mic Buttons Container */}
+        <div className="relative w-full max-w-5xl mx-auto flex flex-col lg:flex-row items-center justify-center gap-4 md:gap-8 px-4 mb-8 md:mt-8 md:mb-0">
 
-          {/* Left Mic Button - Hidden on mobile, shown on desktop */}
-          <div className="hidden lg:flex flex-col items-center gap-3 order-1">
+          {/* Mobile Audio Buttons - Shown only on mobile, above the form */}
+          <div className="relative z-20 flex lg:hidden items-center justify-center gap-4 order-1">
             <button
               type="button"
-              onClick={() => alert('Test your microphone')}
+              onClick={() => setShowMicSettings(true)}
+              className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 border-3 border-orange-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
+            >
+              <Mic size={24} className="text-white" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSpeakerSettings(true)}
+              className="w-16 h-16 rounded-full bg-gradient-to-br from-teal-300 to-teal-400 border-3 border-teal-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
+            >
+              <Volume2 size={24} className="text-white" />
+            </button>
+          </div>
+
+          {/* Left Mic Button - Hidden on mobile, shown on desktop */}
+          <div className="hidden lg:flex flex-col items-center gap-3 order-2">
+            <button
+              type="button"
+              onClick={() => setShowMicSettings(true)}
               className="w-20 h-20 xl:w-24 xl:h-24 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 border-4 border-orange-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
             >
               <Mic size={32} className="xl:w-9 xl:h-9 text-white" />
             </button>
-            <span className="text-white font-semibold text-xs xl:text-sm drop-shadow-lg text-center">Test Your<br/>Your Mic</span>
+            <span className="text-white font-semibold text-xs xl:text-sm drop-shadow-lg text-center">Microphone<br/>Settings</span>
           </div>
 
-          {/* Blue Form Card */}
-          <div className="w-full max-w-md lg:w-[450px] bg-blue-500 rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-2xl order-2">
+          {/* Form Card */}
+          <div className="relative z-20 w-full max-w-md lg:w-[450px] bg-white/85 md:bg-blue-500 backdrop-blur-md md:backdrop-blur-none rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-2xl order-2 lg:order-3">
             <form onSubmit={handleJoin} className="space-y-4 md:space-y-5">
 
               {/* Your Name Input */}
@@ -243,47 +244,36 @@ export default function LobbyPage() {
             </form>
           </div>
 
-          {/* Right Speaker Buttons - Hidden on mobile, shown on desktop */}
-          <div className="hidden lg:flex flex-col gap-4 order-3">
+          {/* Right Speaker Button - Hidden on mobile, shown on desktop */}
+          <div className="hidden lg:flex flex-col items-center gap-3 order-4">
             <button
               type="button"
+              onClick={() => setShowSpeakerSettings(true)}
               className="w-20 h-20 xl:w-24 xl:h-24 rounded-full bg-gradient-to-br from-teal-300 to-teal-400 border-4 border-teal-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
             >
               <Volume2 size={32} className="xl:w-9 xl:h-9 text-white" />
             </button>
-            <button
-              type="button"
-              className="w-20 h-20 xl:w-24 xl:h-24 rounded-full bg-gradient-to-br from-pink-300 to-pink-400 border-4 border-pink-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
-            >
-              <Volume2 size={32} className="xl:w-9 xl:h-9 text-white" />
-            </button>
-          </div>
-
-          {/* Mobile Audio Buttons - Shown only on mobile */}
-          <div className="flex lg:hidden items-center justify-center gap-4 mt-4 order-4">
-            <button
-              type="button"
-              onClick={() => alert('Test your microphone')}
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 border-3 border-orange-200 flex items-center justify-center shadow-xl"
-            >
-              <Mic size={24} className="text-white" />
-            </button>
-            <button
-              type="button"
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-teal-300 to-teal-400 border-3 border-teal-200 flex items-center justify-center shadow-xl"
-            >
-              <Volume2 size={24} className="text-white" />
-            </button>
-            <button
-              type="button"
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-300 to-pink-400 border-3 border-pink-200 flex items-center justify-center shadow-xl"
-            >
-              <Volume2 size={24} className="text-white" />
-            </button>
+            <span className="text-white font-semibold text-xs xl:text-sm drop-shadow-lg text-center">Speaker<br/>Settings</span>
           </div>
         </div>
 
       </div>
+
+      {/* Audio Settings Modals */}
+      <MicrophoneSettingsModal
+        isOpen={showMicSettings}
+        onClose={() => setShowMicSettings(false)}
+        selectedMic={selectedMic}
+        onMicSelect={setSelectedMic}
+      />
+      <SpeakerSettingsModal
+        isOpen={showSpeakerSettings}
+        onClose={() => setShowSpeakerSettings(false)}
+        selectedSpeaker={selectedSpeaker}
+        onSpeakerSelect={setSelectedSpeaker}
+        volume={speakerVolume}
+        onVolumeChange={setSpeakerVolume}
+      />
     </main>
   );
 }
