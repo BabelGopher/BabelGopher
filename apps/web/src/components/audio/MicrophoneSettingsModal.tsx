@@ -79,6 +79,7 @@ export const MicrophoneSettingsModal: React.FC<MicrophoneSettingsModalProps> = (
           <select
             value={selectedMic}
             onChange={(e) => onMicSelect(e.target.value)}
+            aria-label="Select microphone device"
             className="w-full px-4 py-2 bg-white/85 border-2 border-rose-100 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-rose-300"
           >
             {devices.length === 0 ? (
@@ -97,6 +98,7 @@ export const MicrophoneSettingsModal: React.FC<MicrophoneSettingsModalProps> = (
         <button
           onClick={testMicrophone}
           disabled={isTesting}
+          aria-label="Test microphone to verify it's working"
           className={`w-full py-2 rounded-lg font-semibold transition-all ${
             isTesting
               ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
@@ -108,12 +110,13 @@ export const MicrophoneSettingsModal: React.FC<MicrophoneSettingsModalProps> = (
 
         {/* Error Message */}
         {testError && (
-          <p className="mt-2 text-red-600 text-sm text-center">{testError}</p>
+          <p className="mt-2 text-red-600 text-sm text-center" role="alert">{testError}</p>
         )}
 
         {/* Close Button */}
         <button
           onClick={onClose}
+          aria-label="Close microphone settings"
           className="w-full mt-3 py-2 rounded-lg font-semibold border-2 border-rose-200 text-rose-800 hover:bg-rose-50 transition-all"
         >
           Done

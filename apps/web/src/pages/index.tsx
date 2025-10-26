@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Mic, Volume2 } from 'lucide-react';
 import { FR, TH, NL, KR, AL, US } from 'country-flag-icons/react/3x2';
@@ -6,6 +6,17 @@ import { Circle, Triangle, Square } from '../components/shapes';
 import { SpeechBubble } from '../components/landing/SpeechBubble';
 import { MicrophoneSettingsModal } from '../components/audio/MicrophoneSettingsModal';
 import { SpeakerSettingsModal } from '../components/audio/SpeakerSettingsModal';
+import { BrowserWarning } from '../components/BrowserWarning';
+import {
+  getLanguage,
+  saveLanguage,
+  getMicDevice,
+  saveMicDevice,
+  getSpeakerDevice,
+  saveSpeakerDevice,
+  getSpeakerVolume,
+  saveSpeakerVolume,
+} from '../utils/storageUtils';
 
 const LANGUAGE_FLAGS = [
   { code: 'en', name: 'English', flag: US },
@@ -23,12 +34,40 @@ export default function LobbyPage() {
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [loading, setLoading] = useState(false);
 
-  // Audio settings state
+  // Audio settings state - initialized from localStorage
   const [showMicSettings, setShowMicSettings] = useState(false);
   const [selectedMic, setSelectedMic] = useState('default');
   const [showSpeakerSettings, setShowSpeakerSettings] = useState(false);
   const [selectedSpeaker, setSelectedSpeaker] = useState('default');
   const [speakerVolume, setSpeakerVolume] = useState(80);
+
+  // Load preferences from localStorage on mount
+  useEffect(() => {
+    setSelectedLanguage(getLanguage('en'));
+    setSelectedMic(getMicDevice('default'));
+    setSelectedSpeaker(getSpeakerDevice('default'));
+    setSpeakerVolume(getSpeakerVolume(80));
+  }, []);
+
+  // Save language preference when it changes
+  useEffect(() => {
+    saveLanguage(selectedLanguage);
+  }, [selectedLanguage]);
+
+  // Save mic device preference when it changes
+  useEffect(() => {
+    saveMicDevice(selectedMic);
+  }, [selectedMic]);
+
+  // Save speaker device preference when it changes
+  useEffect(() => {
+    saveSpeakerDevice(selectedSpeaker);
+  }, [selectedSpeaker]);
+
+  // Save speaker volume preference when it changes
+  useEffect(() => {
+    saveSpeakerVolume(speakerVolume);
+  }, [speakerVolume]);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +78,9 @@ export default function LobbyPage() {
   };
 
   return (
-    <main className="relative w-full h-screen overflow-hidden bg-gradient-to-b from-orange-100 via-pink-100 to-rose-200 md:bg-gradient-to-br md:from-purple-400 md:via-pink-300 md:to-blue-300">
+    <>
+      <BrowserWarning />
+      <main className="relative w-full h-screen overflow-hidden bg-gradient-to-b from-orange-100 via-pink-100 to-rose-200 md:bg-gradient-to-br md:from-purple-400 md:via-pink-300 md:to-blue-300">
       {/* Background Image - Tower of Babel - Hidden on mobile */}
       <div
         className="hidden md:block absolute inset-0 w-full h-full bg-contain bg-center bg-no-repeat"
@@ -157,6 +198,7 @@ export default function LobbyPage() {
             <button
               type="button"
               onClick={() => setShowMicSettings(true)}
+              aria-label="Open microphone settings"
               className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 border-3 border-orange-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
             >
               <Mic size={24} className="text-white" />
@@ -164,6 +206,7 @@ export default function LobbyPage() {
             <button
               type="button"
               onClick={() => setShowSpeakerSettings(true)}
+              aria-label="Open speaker settings"
               className="w-16 h-16 rounded-full bg-gradient-to-br from-teal-300 to-teal-400 border-3 border-teal-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
             >
               <Volume2 size={24} className="text-white" />
@@ -175,6 +218,7 @@ export default function LobbyPage() {
             <button
               type="button"
               onClick={() => setShowMicSettings(true)}
+              aria-label="Open microphone settings"
               className="w-20 h-20 xl:w-24 xl:h-24 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 border-4 border-orange-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
             >
               <Mic size={32} className="xl:w-9 xl:h-9 text-white" />
@@ -192,6 +236,7 @@ export default function LobbyPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your Name"
+                aria-label="Enter your name"
                 className="w-full px-4 py-3 md:px-5 md:py-4 rounded-xl bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-300 text-base md:text-lg"
                 required
               />
@@ -202,6 +247,7 @@ export default function LobbyPage() {
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value)}
                 placeholder="Room Code"
+                aria-label="Enter room code"
                 className="w-full px-4 py-3 md:px-5 md:py-4 rounded-xl bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-300 text-base md:text-lg"
                 required
               />
@@ -211,6 +257,7 @@ export default function LobbyPage() {
                 <select
                   value={selectedLanguage}
                   onChange={(e) => setSelectedLanguage(e.target.value)}
+                  aria-label="Select output language"
                   className="w-full px-4 py-3 md:px-5 md:py-4 rounded-xl bg-white text-gray-700 appearance-none focus:outline-none focus:ring-4 focus:ring-blue-300 cursor-pointer text-base md:text-lg pr-12"
                 >
                   <option value="">I want to hear in:</option>
@@ -235,6 +282,7 @@ export default function LobbyPage() {
               <button
                 type="submit"
                 disabled={loading}
+                aria-label="Join conference with selected settings"
                 className={`w-full bg-gradient-to-r from-pink-500 to-pink-600 text-white font-bold py-3 md:py-4 rounded-full text-lg md:text-xl shadow-lg transition-all ${
                   loading ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-xl hover:scale-105'
                 }`}
@@ -249,6 +297,7 @@ export default function LobbyPage() {
             <button
               type="button"
               onClick={() => setShowSpeakerSettings(true)}
+              aria-label="Open speaker settings"
               className="w-20 h-20 xl:w-24 xl:h-24 rounded-full bg-gradient-to-br from-teal-300 to-teal-400 border-4 border-teal-200 flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
             >
               <Volume2 size={32} className="xl:w-9 xl:h-9 text-white" />
@@ -274,6 +323,7 @@ export default function LobbyPage() {
         volume={speakerVolume}
         onVolumeChange={setSpeakerVolume}
       />
-    </main>
+      </main>
+    </>
   );
 }

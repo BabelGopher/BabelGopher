@@ -90,6 +90,7 @@ export const SpeakerSettingsModal: React.FC<SpeakerSettingsModalProps> = ({
           <select
             value={selectedSpeaker}
             onChange={(e) => onSpeakerSelect(e.target.value)}
+            aria-label="Select speaker device"
             className="w-full px-4 py-2 bg-white/85 border-2 border-rose-100 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-rose-300"
           >
             {devices.length === 0 ? (
@@ -118,6 +119,7 @@ export const SpeakerSettingsModal: React.FC<SpeakerSettingsModalProps> = ({
             max="100"
             value={volume}
             onChange={(e) => onVolumeChange(Number(e.target.value))}
+            aria-label="Speaker volume slider"
             className="w-full h-2 bg-rose-100 rounded-lg appearance-none cursor-pointer accent-rose-800"
           />
         </div>
@@ -126,6 +128,7 @@ export const SpeakerSettingsModal: React.FC<SpeakerSettingsModalProps> = ({
         <button
           onClick={testSpeaker}
           disabled={isTesting}
+          aria-label="Test speaker with a tone"
           className={`w-full py-2 rounded-lg font-semibold transition-all ${
             isTesting
               ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
@@ -137,12 +140,13 @@ export const SpeakerSettingsModal: React.FC<SpeakerSettingsModalProps> = ({
 
         {/* Error Message */}
         {testError && (
-          <p className="mt-2 text-red-600 text-sm text-center">{testError}</p>
+          <p className="mt-2 text-red-600 text-sm text-center" role="alert">{testError}</p>
         )}
 
         {/* Close Button */}
         <button
           onClick={onClose}
+          aria-label="Close speaker settings"
           className="w-full mt-3 py-2 rounded-lg font-semibold border-2 border-rose-200 text-rose-800 hover:bg-rose-50 transition-all"
         >
           Done
