@@ -23,7 +23,7 @@ export class TTSService {
   private static voices: SpeechSynthesisVoice[] = [];
   private static isInitialized = false;
   private static initPromise: Promise<void> | null = null;
-  
+
   /**
    * Normalize 2-letter language codes to common BCP-47 variants
    */
@@ -69,7 +69,9 @@ export class TTSService {
 
       const finalize = (reason: string) => {
         this.isInitialized = true;
-        console.log(`[TTSService] Initialized (${reason}) with ${this.voices.length} voices`);
+        console.log(
+          `[TTSService] Initialized (${reason}) with ${this.voices.length} voices`
+        );
         resolve();
       };
 
@@ -87,7 +89,10 @@ export class TTSService {
         if (this.voices.length > 0) {
           // Cleanup listener(s)
           try {
-            (synth as any).removeEventListener?.("voiceschanged", onVoicesChanged);
+            (synth as any).removeEventListener?.(
+              "voiceschanged",
+              onVoicesChanged
+            );
           } catch {}
           // Also clear property handler if set
           try {
@@ -119,7 +124,10 @@ export class TTSService {
           setVoices();
           // Do not depend on event forever; resolve so callers can poll capabilities
           try {
-            (synth as any).removeEventListener?.("voiceschanged", onVoicesChanged);
+            (synth as any).removeEventListener?.(
+              "voiceschanged",
+              onVoicesChanged
+            );
           } catch {}
           finalize("timeout");
         }
@@ -165,7 +173,9 @@ export class TTSService {
     const baseLang = normalized.split("-")[0];
 
     // Priority 1: Non-local (cloud) voice with exact language match
-    let voice = this.voices.find((v) => v.lang === normalized && !v.localService);
+    let voice = this.voices.find(
+      (v) => v.lang === normalized && !v.localService
+    );
 
     // Priority 2: Google voice with exact language match (high quality)
     if (!voice) {
@@ -236,8 +246,14 @@ export class TTSService {
         }
       } catch {}
 
-      // Cancel any ongoing speech to implement cancel-and-replace strategy
-      this.cancel();
+      // Cancel any ongoing/pending speech first; then give synth a moment to flush
+      try {
+        if (typeof window !== "undefined" && window.speechSynthesis) {
+          if (window.speechSynthesis.speaking || (window.speechSynthesis as any).pending) {
+            window.speechSynthesis.cancel();
+          }
+        }
+      } catch {}
 
       const voice = this.findBestVoice(lang);
       if (!voice) {
@@ -289,8 +305,15 @@ export class TTSService {
         reject(new Error(`Speech synthesis error: ${event.error}`));
       };
 
-      // Speak the utterance
-      window.speechSynthesis.speak(utterance);
+      // Extra debug: log chosen voice
+      try {
+        console.log(`[TTSService] Using voice: ${voice.name} (${voice.lang})`);
+      } catch {}
+
+      // Speak the utterance after a short delay to avoid cancel/race conditions
+      setTimeout(() => {
+        window.speechSynthesis.speak(utterance);
+      }, 20);
     });
   }
 

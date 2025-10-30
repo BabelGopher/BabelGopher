@@ -236,7 +236,10 @@ export function useLiveKit({
         // Connect to room with 12s timeout
         const connectTimeoutMs = 12000;
         const connectTimeout = new Promise<void>((_, reject) => {
-          setTimeout(() => reject(new Error("Connection timed out")), connectTimeoutMs);
+          setTimeout(
+            () => reject(new Error("Connection timed out")),
+            connectTimeoutMs
+          );
         });
         await Promise.race([newRoom.connect(url, token), connectTimeout]);
         // Mark connecting complete as soon as the room connection is established
@@ -305,8 +308,7 @@ export function useLiveKit({
           !errorMessage.includes("Invalid token") &&
           !errorMessage.includes("400") &&
           !errorMessage.includes("401") &&
-          !errorMessage.includes("403") &&
-          !errorMessage.toLowerCase().includes("timed out");
+          !errorMessage.includes("403");
 
         if (shouldRetry && isRetryableError) {
           const delay = retryDelays[retryCount];
