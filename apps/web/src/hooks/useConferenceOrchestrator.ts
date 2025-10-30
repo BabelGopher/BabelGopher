@@ -361,13 +361,16 @@ export function useConferenceOrchestrator({
             isProcessing: false,
             timestamp: Date.now(),
           };
-          // Remove any older processing-only entries (no partial) to avoid lingering blink rows
+          // Remove any older processing-only entries (no partial)
+          // and any other processing entries from the same speaker (stale partials)
           const cleaned = next.filter(
             (s) =>
               !(
                 s.isProcessing &&
-                (!s.originalTextPartial ||
-                  s.originalTextPartial.trim().length === 0)
+                (
+                  (!s.originalTextPartial || s.originalTextPartial.trim().length === 0) ||
+                  (s.speakerName === speaker && s.id !== subId)
+                )
               )
           );
           setSubtitles(cleaned);
@@ -381,13 +384,15 @@ export function useConferenceOrchestrator({
             languageCode: targetLanguage,
             isProcessing: false,
           };
-          // Add and also prune processing-only items
+          // Add and also prune stale processing items
           const combined = [...subtitles, subtitle].filter(
             (s) =>
               !(
                 s.isProcessing &&
-                (!s.originalTextPartial ||
-                  s.originalTextPartial.trim().length === 0)
+                (
+                  (!s.originalTextPartial || s.originalTextPartial.trim().length === 0) ||
+                  (s.speakerName === speaker && s.id !== subId)
+                )
               )
           );
           setSubtitles(combined.slice(-200));

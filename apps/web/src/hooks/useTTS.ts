@@ -151,7 +151,9 @@ export function useTTS(
 
     // Cleanup: cancel speech if message changes or component unmounts
     return () => {
-      cancel();
+      if (message) {
+        cancel();
+      }
     };
   }, [
     message?.id,
