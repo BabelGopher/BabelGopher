@@ -1,133 +1,139 @@
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
-import { ConferenceTopBar } from '../../components/conference/ConferenceTopBar';
-import { ConferenceMainContent } from '../../components/conference/ConferenceMainContent';
-import { ConferenceControlBar } from '../../components/conference/ConferenceControlBar';
-import { Participant, Subtitle, ConferenceSettings } from '../../types/conference';
-import {
-  DUMMY_PARTICIPANTS,
-  getInitialDummySubtitles,
-  simulateParticipantSpeaking,
-  simulateNewSubtitle,
-  getRandomParticipant,
-  generateDummySubtitle,
-  getRandomSpeechSample,
-} from '../../lib/dummyData';
-import { Spinner } from '../../components/ui';
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/router";
+import { ConferenceTopBar } from "../../components/conference/ConferenceTopBar";
+import { ConferenceMainContent } from "../../components/conference/ConferenceMainContent";
+import { ConferenceControlBar } from "../../components/conference/ConferenceControlBar";
+import { SettingsModal } from "../../components/conference/SettingsModal";
+import { ExitConfirmModal } from "../../components/conference/ExitConfirmModal";
+import { Spinner } from "../../components/ui";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
+import { useConferenceOrchestrator } from "../../hooks/useConferenceOrchestrator";
+import { useSettings } from "../../hooks/useSettings";
+import { useModals } from "../../hooks/useModals";
+import { useToasts } from "../../hooks/useToasts";
 
-export default function ConferenceRoom() {
+function ConferenceRoomContent() {
   const router = useRouter();
-  const { roomName } = router.query;
+  const { roomName, name, lang } = router.query;
 
-  // State management
-  const [participants, setParticipants] = useState<Participant[]>(DUMMY_PARTICIPANTS);
-  const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
-  const [settings, setSettings] = useState<ConferenceSettings>({
-    isTtsEnabled: true,
-    isSubtitleEnabled: true,
-    selectedLanguage: 'ko',
-    audioDevices: {
-      microphone: 'default',
-      speaker: 'default',
-    },
+  const { showWarning } = useToasts();
+  const { isSubtitleEnabled, selectedLanguage, toggleSubtitle, setLanguage } =
+    useSettings();
+
+  const {
+    isSettingsOpen,
+    isExitConfirmOpen,
+    openSettings,
+    closeSettings,
+    openExitConfirm,
+    closeExitConfirm,
+  } = useModals();
+
+  // Track if transcription has been started
+  const [hasStartedTranscription, setHasStartedTranscription] = useState(false);
+  // Ensure auto-start runs at most once per mount
+  const [autoStartAttempted, setAutoStartAttempted] = useState(false);
+
+  // Use the master orchestrator hook
+  const {
+    isConnecting,
+    isConnected,
+    participants,
+    subtitles,
+    isMuted,
+    toggleMute,
+    setMicrophoneDevice,
+    disconnect,
+    isTranscribing,
+    startTranscription,
+    stopTranscription,
+    isTtsEnabled,
+    toggleTTS,
+    capabilities,
+    canStartSTT,
+    translationDownload,
+  } = useConferenceOrchestrator({
+    roomName: (roomName as string) || "default-room",
+    participantName: (name as string) || "Anonymous",
+    targetLanguage: selectedLanguage || (lang as string) || "en",
   });
-  const [isConnecting, setIsConnecting] = useState(true);
 
-  // Simulate connection delay
+  // Auto-start transcription at most once per mount when ready
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsConnecting(false);
-      setSubtitles(getInitialDummySubtitles());
-    }, 1500);
+    if (!autoStartAttempted && canStartSTT) {
+      console.log("[Conference] Auto-starting transcription...");
+      setAutoStartAttempted(true);
+      startTranscription();
+    }
+  }, [canStartSTT, autoStartAttempted, startTranscription]);
 
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Simulate participant speaking changes (every 3 seconds)
+  // Mark as started only after transcription actually begins
   useEffect(() => {
-    if (isConnecting) return;
+    if (isTranscribing && !hasStartedTranscription) {
+      setHasStartedTranscription(true);
+    }
+  }, [isTranscribing, hasStartedTranscription]);
 
-    const interval = setInterval(() => {
-      setParticipants((prevParticipants) => {
-        const randomParticipant = getRandomParticipant(prevParticipants);
-        return simulateParticipantSpeaking(prevParticipants, randomParticipant.id);
-      });
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [isConnecting]);
-
-  // Simulate new subtitles arriving (every 4-7 seconds, random)
+  // Show capability warnings on mount
   useEffect(() => {
-    if (isConnecting || !settings.isSubtitleEnabled) return;
-
-    const scheduleNextSubtitle = () => {
-      const delay = Math.floor(Math.random() * 3000) + 4000; // 4-7 seconds
-
-      return setTimeout(() => {
-        setSubtitles((prevSubtitles) => {
-          const randomParticipant = getRandomParticipant(participants);
-          const { original, translated } = getRandomSpeechSample();
-          const newSubtitle = generateDummySubtitle(randomParticipant, original, translated);
-          return simulateNewSubtitle(prevSubtitles, newSubtitle);
-        });
-
-        // Schedule next subtitle
-        timeoutRef.current = scheduleNextSubtitle();
-      }, delay);
-    };
-
-    const timeoutRef = { current: scheduleNextSubtitle() };
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+    if (!isConnecting) {
+      if (!capabilities.sttAvailable) {
+        showWarning(
+          "Speech recognition not available. Please use Chrome/Edge browser."
+        );
       }
-    };
-  }, [isConnecting, settings.isSubtitleEnabled, participants]);
+
+      if (!capabilities.translationAvailable) {
+        showWarning(
+          "Translation API not available. Enable Chrome AI features."
+        );
+      }
+
+      if (!capabilities.ttsAvailable) {
+        showWarning("Text-to-speech not available in this browser.");
+      }
+    }
+  }, [isConnecting, capabilities, showWarning]);
 
   // Handlers
   const handleExit = () => {
-    router.push('/');
+    openExitConfirm();
+  };
+
+  const handleConfirmExit = async () => {
+    closeExitConfirm();
+    await disconnect();
+    router.push("/");
   };
 
   const handleToggleTts = () => {
-    setSettings((prev) => ({
-      ...prev,
-      isTtsEnabled: !prev.isTtsEnabled,
-    }));
+    toggleTTS();
   };
 
   const handleToggleSubtitle = () => {
-    setSettings((prev) => ({
-      ...prev,
-      isSubtitleEnabled: !prev.isSubtitleEnabled,
-    }));
+    toggleSubtitle();
   };
 
   const handleSelectLanguage = (lang: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      selectedLanguage: lang,
-    }));
+    setLanguage(lang);
   };
 
   const handleOpenSettings = () => {
-    // TODO: Implement settings modal
-    alert('Settings modal coming soon!');
+    openSettings();
   };
 
   const handleToggleMute = () => {
-    setParticipants((prevParticipants) =>
-      prevParticipants.map((p) =>
-        p.isSelf ? { ...p, isMuted: !p.isMuted } : p
-      )
-    );
+    toggleMute();
   };
 
-  // Get local participant's mute status
-  const localParticipant = participants.find((p) => p.isSelf);
-  const isMuted = localParticipant?.isMuted ?? false;
+  const handleToggleTranscription = () => {
+    if (isTranscribing) {
+      stopTranscription();
+      setHasStartedTranscription(false);
+    } else {
+      startTranscription();
+    }
+  };
 
   // Loading state
   if (isConnecting) {
@@ -136,6 +142,9 @@ export default function ConferenceRoom() {
         <div className="text-center">
           <Spinner size="lg" />
           <p className="text-white text-lg mt-4">Connecting to {roomName}...</p>
+          <p className="text-gray-400 text-sm mt-2">
+            Initializing WebRTC and AI services...
+          </p>
         </div>
       </div>
     );
@@ -148,20 +157,85 @@ export default function ConferenceRoom() {
       <ConferenceMainContent
         participants={participants}
         subtitles={subtitles}
-        isSubtitleEnabled={settings.isSubtitleEnabled}
+        isSubtitleEnabled={isSubtitleEnabled}
       />
 
       <ConferenceControlBar
-        isTtsEnabled={settings.isTtsEnabled}
+        isTtsEnabled={isTtsEnabled}
         onToggleTts={handleToggleTts}
-        isSubtitleEnabled={settings.isSubtitleEnabled}
+        isSubtitleEnabled={isSubtitleEnabled}
         onToggleSubtitle={handleToggleSubtitle}
-        selectedLanguage={settings.selectedLanguage}
+        selectedLanguage={selectedLanguage}
         onSelectLanguage={handleSelectLanguage}
         onOpenSettings={handleOpenSettings}
         isMuted={isMuted}
         onToggleMute={handleToggleMute}
       />
+
+      {/* Translation Model Download Overlay */}
+      {translationDownload?.inProgress && (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50 pointer-events-none">
+          <div className="bg-gray-800 text-white px-6 py-4 rounded-lg shadow-lg w-80 text-center pointer-events-auto">
+            <p className="mb-3 text-sm">Preparing translation model...</p>
+            <div className="w-full bg-gray-700 rounded h-2 overflow-hidden">
+              <div
+                className="bg-blue-500 h-2 transition-all"
+                style={{ width: `${translationDownload.progress}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-gray-300">
+              {translationDownload.progress}%
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Transcription Status Indicator (Debug) */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="absolute bottom-20 right-4 bg-gray-800 text-white text-xs px-3 py-2 rounded-lg shadow-lg">
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-2 h-2 rounded-full ${
+                isTranscribing ? "bg-green-500 animate-pulse" : "bg-gray-500"
+              }`}
+            />
+            <span>{isTranscribing ? "Listening..." : "Not listening"}</span>
+          </div>
+          <button
+            onClick={handleToggleTranscription}
+            className="mt-2 text-xs bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded"
+          >
+            {isTranscribing ? "Stop STT" : "Start STT"}
+          </button>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={closeSettings}
+        onMicrophoneChange={(deviceId) => {
+          if (isConnected) {
+            setMicrophoneDevice(deviceId);
+          }
+        }}
+      />
+
+      {/* Exit Confirmation Modal */}
+      <ExitConfirmModal
+        isOpen={isExitConfirmOpen}
+        onClose={closeExitConfirm}
+        onConfirm={handleConfirmExit}
+      />
     </div>
+  );
+}
+
+// Wrap the entire component with ErrorBoundary
+export default function ConferenceRoom() {
+  return (
+    <ErrorBoundary>
+      <ConferenceRoomContent />
+    </ErrorBoundary>
   );
 }

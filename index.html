@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GopherCon 2025: BabelGopher - Go로 실시간 AI 통역 오케스트레이션하기 (Deep Dive)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.3/dist/purify.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #0d1117; color: #c9d1d9; overscroll-behavior: none; }
+        .slide { display: none; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100vh; padding: 4vw; border: 1px solid #30363d; box-sizing: border-box; opacity: 0; transition: opacity 0.5s ease-in-out; position: absolute; top: 0; left: 0; }
+        .slide.active { display: flex; opacity: 1; }
+        .slide-header { width: 100%; position: absolute; top: 30px; left: 4vw; font-size: 1.2rem; color: #58a6ff; font-weight: 700; }
+        .slide-footer { width: 100%; position: absolute; bottom: 30px; right: 4vw; text-align: right; font-size: 1rem; color: #8b949e; }
+        h1 { font-size: 3.5vw; font-weight: 900; color: #58a6ff; text-align: center; margin-bottom: 0.5rem; }
+        h2 { font-size: 2vw; font-weight: 700; color: #c9d1d9; text-align: center; margin-bottom: 1.5rem; }
+        .content { font-size: 1.5vw; line-height: 1.6; max-width: 90%; width: 100%; }
+        ul { list-style-type: '✓ '; padding-left: 2rem; margin-top: 1rem; }
+        li { margin-bottom: 0.8rem; padding-left: 0.5rem; }
+        .highlight { color: #58a6ff; font-weight: 700; }
+        .code { background-color: #161b22; padding: 1rem; border-radius: 8px; font-family: 'Roboto Mono', monospace; margin-top: 1rem; border: 1px solid #30363d; font-size: 1vw; width: 100%; box-sizing: border-box; white-space: pre-wrap; }
+        .code .comment { color: #8b949e; }
+        .code .keyword { color: #ff7b72; }
+        .code .type { color: #d2a8ff; }
+        .code .function { color: #79c0ff; }
+        .code .string { color: #a5d6ff; }
+        .nav-arrow { position: fixed; top: 50%; transform: translateY(-50%); background-color: rgba(48, 54, 61, 0.5); color: white; padding: 1rem; border-radius: 50%; cursor: pointer; z-index: 10; border: 1px solid #8b949e; user-select: none; }
+        .nav-arrow.left { left: 2vw; }
+        .nav-arrow.right { right: 2vw; }
+        .mermaid { background-color: #161b22 !important; padding: 1rem; border-radius: 8px; border: 1px solid #30363d; width: 100%; box-sizing: border-box; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem; align-items: center;}
+    </style>
+</head>
+<body class="overflow-hidden">
+
+    <!-- 1. Title -->
+    <section class="slide active">
+        <h1>BabelGopher</h1>
+        <h2>Go로 실시간 AI 통역 오케스트레이션하기</h2>
+        <p class="mt-12 text-2xl text-gray-400">[Your Name / Team Name]</p>
+        <p class="mt-4 text-2xl text-gray-400">GopherCon 2025 - Technical Deep Dive</p>
+    </section>
+
+    <!-- 2. Agenda -->
+    <section class="slide">
+        <div class="slide-header">Agenda</div>
+        <div class="content"><h1>오늘 이야기할 것들</h1>
+            <ul>
+                <li>The Problem: 실시간 통역의 기술적 난관</li>
+                <li class="highlight">The Foundation: WebRTC Deep Dive & Phase 1 교훈</li>
+                <li>The Core Idea: Go를 AI 오케스트레이터로 사용하기</li>
+                <li>Deep Dive: 5가지 핵심 챌린지와 Go를 이용한 해결책</li>
+                <li>Performance: Go 동시성이 만들어낸 결과</li>
+                <li>Future: 다음 단계는?</li>
+            </ul>
+        </div>
+    </section>
+    
+    <!-- 3. Problem -->
+    <section class="slide">
+        <div class="slide-header">문제 제기</div>
+        <div class="content text-center">
+            <h1>실시간 소통의 거대한 벽, 언어 장벽 🧱</h1>
+            <ul>
+                <li>글로벌 협업은 필수: 화상 회의, 웨비나, 라이브 스트리밍...</li>
+                <li>컨퍼런스 자막을 보느라 정작 중요한 <span class="highlight">발표 화면을 놓치는 문제</span>.</li>
+                <li class="highlight">"대화 흐름을 깨지 않는 통역이 가능할까?"</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- 4. Challenges -->
+    <section class="slide">
+        <div class="slide-header">기술적 난관</div>
+        <div class="content"><h1>실시간 통역의 핵심 챌린지</h1>
+            <ul>
+                <li><span class="highlight">누적 지연 (Cumulative Latency):</span> 여러 AI API를 연속 호출할 때 발생하는 총 지연.</li>
+                <li><span class="highlight">대규모 동시성 (Massive Concurrency):</span> 수천 명의 오디오 스트림을 동시에, 효율적으로 처리.</li>
+                <li><span class="highlight">I/O 병목 (I/O Bottlenecks):</span> 외부 AI 서비스 호출은 느리고, 전체 시스템을 멈추게 할 수 있음.</li>
+                <li><span class="highlight">상태 관리 (State Management):</span> 동시 환경에서 대화 맥락을 어떻게 안전하게 기억하고 사용할 것인가?</li>
+                 <li><span class="highlight">파이프라인 복잡성 (Pipeline Complexity):</span> 데이터 조각(청크)들이 파이프라인을 통과하며 순서가 꼬이거나 유실되지 않도록 보장.</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- 5. Foundation: WebRTC -->
+    <section class="slide">
+        <div class="slide-header">기반 기술: WebRTC</div>
+        <div class="content"><h1>WebRTC & LiveKit: 실시간 통신의 초석</h1>
+            <ul>
+                <li><span class="highlight">WebRTC:</span> 브라우저 간 저지연 오디오/비디오 통신을 위한 오픈 소스 프레임워크.</li>
+                <li><span class="highlight">LiveKit:</span> WebRTC를 쉽게 사용할 수 있게 해주는 오픈 소스 SFU(Selective Forwarding Unit).</li>
+                <li><span class="highlight">우리의 과제:</span> 이 LiveKit/WebRTC 오디오 스트림을 어떻게 실시간으로 가로채고, 우리의 Go AI 파이프라인에 주입할 것인가?</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- 6. NEW: WebRTC Challenge -->
+    <section class="slide">
+        <div class="slide-header">WebRTC Deep Dive: NAT Traversal</div>
+        <div class="content">
+            <h1>챌린지: 어떻게 서로를 찾을까? (NAT Traversal)</h1>
+            <p>대부분의 장치는 사설 IP(e.g., 192.168.x.x)를 사용하는 공유기(NAT) 뒤에 있습니다. 이 주소는 인터넷에서 직접 접근할 수 없습니다.</p>
+            <div class="mermaid w-full">
+                graph TD
+                    subgraph LAN 1 (192.168.1.0/24)
+                        PeerA[Peer A <br> 192.168.1.5]
+                    end
+                    subgraph LAN 2 (10.0.0.0/24)
+                        PeerB[Peer B <br> 10.0.0.10]
+                    end
+                    NAT1[NAT Router 1]
+                    NAT2[NAT Router 2]
+                    Internet((Internet))
+
+                    PeerA -- 사설 IP --> NAT1
+                    PeerB -- 사설 IP --> NAT2
+                    NAT1 <--> Internet
+                    NAT2 <--> Internet
+                    PeerA -.->| ??? 어떻게 직접 연결하지? | PeerB
+            </div>
+            <p class="text-center mt-4 highlight text-2xl">"내 공인 IP 주소는 뭐지? 상대방에게 어떻게 연결해야 하지?"</p>
+        </div>
+    </section>
+
+    <!-- 7. NEW: ICE Framework -->
+    <section class="slide">
+        <div class="slide-header">WebRTC Deep Dive: ICE</div>
+        <div class="content">
+            <h1>해결책: ICE 프레임워크</h1>
+            <p><span class="highlight">I</span>nteractive <span class="highlight">C</span>onnectivity <span class="highlight">E</span>stablishment는 두 장치 간 최적의 통신 경로를 찾는 프레임워크입니다.</p>
+            <div class="mermaid w-full">
+                graph TD
+                    A[Start ICE] --> B{1. 주소 후보 수집};
+                    B -- Local IP --> C[후보 목록];
+                    B -- STUN 요청 --> D[STUN Server];
+                    D -- Public IP --> B;
+                    B -- STUN IP --> C;
+                    B -- TURN 요청 --> E[TURN Server];
+                    E -- Relay IP --> B;
+                    B -- TURN IP --> C;
+                    C --> F{2. 후보 교환<br>(시그널링 서버 통해)};
+                    F --> G{3. 연결성 테스트<br>(P2P 시도)};
+                    G -- 성공 --> H[4a. 최적 경로 선택<br>& P2P 연결!];
+                    G -- 실패 --> I[4b. 최후의 수단<br>TURN 릴레이 연결];
+            </div>
+        </div>
+    </section>
+
+    <!-- 8. NEW: STUN/TURN Roles -->
+    <section class="slide">
+        <div class="slide-header">WebRTC Deep Dive: STUN & TURN</div>
+        <div class="content">
+            <h1>ICE의 조력자들: STUN vs. TURN</h1>
+            <div class="grid-2">
+                <div>
+                    <h2>STUN 서버</h2>
+                    <p>(Session Traversal Utilities for NAT)</p>
+                    <ul>
+                        <li>"당신의 공인 IP 주소는 OOO입니다"라고 알려주는 간단한 서버.</li>
+                        <li>대부분의 경우 이걸로 P2P 연결이 가능.</li>
+                        <li>한계: 더 엄격한 NAT(Symmetric NAT) 환경에서는 실패.</li>
+                    </ul>
+                    <div class="mermaid">
+                        sequenceDiagram
+                            Peer->>STUN: Who am I?
+                            STUN-->>Peer: You are 203.0.113.10
+                    </div>
+                </div>
+                <div>
+                    <h2>TURN 서버</h2>
+                    <p>(Traversal Using Relays around NAT)</p>
+                    <ul>
+                        <li>최후의 보루. P2P 연결이 불가능할 때 모든 트래픽을 <span class="highlight">중계</span>하는 서버.</li>
+                        <li>연결성은 보장되지만, 서버 비용과 지연 시간이 증가.</li>
+                        <li>LiveKit 같은 SFU는 TURN 서버의 역할을 포함/대체할 수 있습니다.</li>
+                    </ul>
+                    <div class="mermaid">
+                        sequenceDiagram
+                            participant PeerA
+                            participant TURN
+                            participant PeerB
+                            PeerA->>TURN: Relay this to PeerB
+                            TURN->>PeerB: (Packet from PeerA)
+                            PeerB->>TURN: Relay this to PeerA
+                            TURN-->>PeerA: (Response from PeerB)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 9. Phase 1 Recap -->
+    <section class="slide">
+        <div class="slide-header">Phase 1 요약</div>
+        <div class="content"><h1>클라이언트 AI의 가능성, 그리고 명확한 한계</h1>
+            <ul>
+                <li><span class="highlight">얻은 교훈 1:</span> 클라이언트 AI는 빠르지만, 기능(언어)과 제어(튜닝)에 한계가 명확함.</li>
+                <li><span class="highlight">얻은 교훈 2:</span> 연속적인 AI API 호출은 클라이언트에서 관리하기 복잡하고 지연 누적이 심각.</li>
+                <li class="highlight">결론: 더 나은 품질과 확장성을 위해서는 서버의 역할이 필수적!</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- 10. Why Go? -->
+    <section class="slide">
+        <div class="slide-header">왜 Go인가?</div>
+        <div class="content"><h1>Go, AI 오케스트라의 지휘자가 되다! 🎶</h1>
+            <ul>
+                <li><span class="highlight">가벼운 동시성:</span> 수천 개의 Goroutine으로 수천 개의 I/O Bound 작업을 동시에 처리.</li>
+                <li><span class="highlight">간결한 채널:</span> Goroutine 간 데이터 흐름을 안전하고 명확하게 관리.</li>
+                <li><span class="highlight">네트워킹 & I/O 최적화:</span> 외부 AI API 호출 처리에 탁월.</li>
+                <li><span class="highlight">단일 바이너리 배포:</span> 의존성 없이 Cloud Run, Fargate 등에 쉽게 배포.</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- 11. NEW: Go & WebRTC Ecosystem -->
+    <section class="slide">
+        <div class="slide-header">Go & WebRTC</div>
+        <div class="content">
+            <h1>Go와 WebRTC 생태계: 왜 완벽한 조합인가?</h1>
+            <p>WebRTC 서버(SFU, TURN 등)는 본질적으로 복잡합니다: 수많은 동시 연결, 상태 관리(Stateful), 네트워크 I/O 집약적.</p>
+            <div class="grid-2">
+                 <ul>
+                    <li><span class="highlight">Goroutine-per-Connection:</span> 각 피어 연결을 가벼운 고루틴으로 처리하여 수만 개의 동시 연결을 쉽게 관리.</li>
+                    <li><span class="highlight">Channels:</span> 미디어 패킷, 시그널링 메시지를 고루틴 간에 안전하게 전달.</li>
+                    <li><span class="highlight">Non-blocking I/O:</span> 네트워크 I/O 대기 시 다른 연결 처리를 계속하여 리소스 낭비 최소화.</li>
+                </ul>
+                <div class="mermaid">
+                    graph TD
+                        subgraph Go WebRTC Server
+                            direction LR
+                            C1[Peer 1] -.-> G1(Goroutine 1)
+                            C2[Peer 2] -.-> G2(Goroutine 2)
+                            C3[Peer 3] -.-> G3(Goroutine 3)
+                            CN[Peer N] -.-> GN(Goroutine N)
+                            G1 -- channel --> M
+                            G2 -- channel --> M
+                            G3 -- channel --> M
+                            GN -- channel --> M(Media Router)
+                        end
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 12. NEW: Pion -->
+    <section class="slide">
+        <div class="slide-header">Go & WebRTC</div>
+        <div class="content">
+            <h1>Pion: 순수 Go로 작성된 WebRTC 툴킷 🧩</h1>
+            <p>`pion/webrtc`는 WebRTC API의 순수 Go 구현체입니다. Cgo나 외부 의존성이 없습니다.</p>
+            <div class="grid-2">
+                <ul>
+                    <li><span class="highlight">완전한 제어:</span> 미디어 플레인(media plane)까지 Go로 직접 제어 가능. (e.g., 서버에서 오디오 패킷 조작)</li>
+                    <li><span class="highlight">모듈성:</span> 필요한 부분(ICE, DTLS, SCTP)만 가져다 쓸 수 있습니다.</li>
+                    <li><span class="highlight">Go 생태계 통합:</span> Go의 모든 라이브러리, 도구(pprof, testing)와 완벽하게 호환됩니다.</li>
+                </ul>
+                <div class="code">
+                    <p><span class="comment">// Pion으로 PeerConnection 생성하기</span></p>
+                    <p>peerConnection, err := webrtc.<span class="function">NewPeerConnection</span>(config)</p>
+                    <p><span class="keyword">if</span> err != nil {</p>
+                    <p>  <span class="function">panic</span>(err)</p>
+                    <p>}</p>
+                    <p><span class="comment">// ... 트랙 추가 및 시그널링 로직 ...</span></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 13. NEW: LiveKit -->
+    <section class="slide">
+        <div class="slide-header">Go & WebRTC</div>
+        <div class="content">
+            <h1>LiveKit: Go로 제작된 프로덕션급 SFU 🚀</h1>
+            <p>LiveKit의 핵심 미디어 서버(SFU)는 **Go로 작성되었습니다!**</p>
+             <div class="grid-2">
+                <ul>
+                    <li><span class="highlight">왜 Go를 선택했을까?</span>
+                        <ul>
+                            <li>수만 명의 동시 접속자를 처리하기 위한 **고성능**과 **확장성**.</li>
+                            <li>Pion 라이브러리를 기반으로 하여 WebRTC 스택을 Go 네이티브로 제어.</li>
+                        </ul>
+                    </li>
+                    <li><span class="highlight">BabelGopher가 LiveKit을 선택한 이유:</span> Go로 검증된 강력한 성능의 오픈소스 SFU를 직접 운영할 필요 없이 바로 사용할 수 있기 때문입니다.</li>
+                </ul>
+                <div class="mermaid">
+                     graph TD
+                        subgraph LiveKit Architecture
+                            A[Client] <--> LB[Load Balancer]
+                            LB --> S1[LiveKit Server (Go/Pion)]
+                            LB --> S2[LiveKit Server (Go/Pion)]
+                            LB --> SN[LiveKit Server (Go/Pion)]
+                            S1 <--> R[Redis]
+                            S2 <--> R
+                            SN <--> R
+                        end
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ... (The rest of the slides are renumbered and follow the previous deep-dive structure) ... -->
+    <section class="slide"><div class="slide-header">Phase 2 아키텍처</div><h1>하이브리드 아키텍처: Go 중심으로 재편 🏗️</h1><div class="mermaid w-full h-3/4">graph TD; User --> C[Client Browser]; C -->|"1. Orchestrate Req"| S(Go Server - AI Orchestrator); S -->|"2. Decision"| C; subgraph Client Path; C -- "3a. Use Nano" --> N[Chrome AI APIs]; end; subgraph Server Path; C -- "3b. Send Audio" --> S; S -- "Go Pipeline" --> P[STT -> Refine -> Translate -> TTS]; P -- "Calls" --> EXT[External AI Services]; S -- "Async Save" --> DB[(Firestore)]; S -- "4. Push Result" --> C; end;</div></section>
+    <section class="slide"><div class="slide-header">Challenge #1: 대규모 동시 연결</div><div class="content grid-2"><div><h1>C10K를 넘어서: 수천 명의 동시 통역</h1><ul><li><span class="highlight">문제점:</span> 사용자마다 스레드를 할당하는 전통적인 방식은 OS 오버헤드로 인해 수천 개의 동시 연결에서 멈춥니다.</li><li><span class="highlight">요구사항:</span> 각 사용자의 오디오 스트림을 독립적으로, 다른 사용자에게 영향을 주지 않고 처리해야 합니다.</li></ul></div><div><div class="mermaid">graph TD; U1 --> S[Server]; U2 --> S; U3 --> S; U_N[User N] --> S;</div></div></div></section>
+    <section class="slide"><div class="slide-header">Solution #1: Goroutine-per-Connection</div><div class="content"><h1>해결책: 연결마다 고루틴 할당</h1><p>Go는 각 클라이언트 연결(e.g., WebSocket)마다 전용 고루틴을 할당하는 모델을 매우 저렴한 비용으로 구현할 수 있습니다.</p><div class="grid-2"><ul><li><span class="highlight">가벼움:</span> 고루틴은 스레드보다 훨씬 적은 메모리(KB 단위)로 시작하여 수만 개 이상 생성 가능합니다.</li><li><span class="highlight">독립성:</span> 한 클라이언트의 파이프라인 처리가 다른 클라이언트에 영향을 주지 않습니다.</li><li><span class="highlight">단순한 코드:</span> 복잡한 콜백 없이, 각 연결을 동기식 코드처럼 간결하게 작성할 수 있습니다.</li></ul><div class="code"><p><span class="comment">// 새로운 연결이 들어올 때마다</span></p><p><span class="keyword">func</span> <span class="function">serveWs</span>(w http.ResponseWriter, r *http.Request) {</p><p>  conn, _ := <span class="function">upgrader.Upgrade</span>(w, r, nil)</p><p>  <span class="keyword">go</span> <span class="function">handleConnection</span>(conn) <span class="comment">// 새 연결을 위한 고루틴 생성!</span></p><p>}</p><br><p><span class="keyword">func</span> <span class="function">handleConnection</span>(conn *<span class="type">websocket.Conn</span>) {</p><p>  <span class="comment">// 이 고루틴은 이 연결만을 전담합니다.</span></p><p>  <span class="keyword">for</span> { <span class="comment">/* ... read from conn and process ... */</span> }</p><p>}</p></div></div></div></section>
+    <section class="slide"><div class="slide-header">Challenge #2: I/O 병목과 누적 지연</div><div class="content"><h1>AI 파이프라인의 I/O 지옥</h1><h2>총 지연 = T(STT) + T(Refine) + T(Translate) + T(TTS)</h2><ul><li><span class="highlight">문제점:</span> STT API 호출(네트워크 I/O)이 끝날 때까지 Refine API 호출은 시작될 수 없습니다. 이런 순차적 I/O 대기는 전체 파이프라인을 극도로 느리게 만듭니다.</li><li><span class="highlight">요구사항:</span> 한 단계의 I/O 대기가 다른 단계나 다른 사용자의 처리를 막아서는 안됩니다.</li></ul><div class="mermaid">sequenceDiagram; participant C as Client; participant S as Go Server; participant AI as External AI; C->>S: Audio Chunk; S->>AI: 1. STT (Blocking); AI-->>S: T1; S->>AI: 2. Refine (Blocking); AI-->>S: T2; S->>AI: 3. Translate (Blocking); AI-->>S: T3; S->>C: Final Result;</div></div></section>
+    <section class="slide"><div class="slide-header">Solution #2: 채널 기반 파이프라인</div><div class="content"><h1>해결책: 고루틴과 채널을 이용한 파이프라인 패턴</h1><p>각 AI 처리 단계를 독립적인 고루틴(또는 워커 풀)으로 만들고, 채널(Channel)을 통해 데이터를 전달합니다.</p><div class="mermaid">graph TD; A[Reader] -- chunk --> chan1(audioChan); chan1 --> B[STT Workers]; B -- stt_result --> chan2(sttChan); chan2 --> C[Refine Worker]; C -- refined_text --> chan3(refinedChan); chan3 --> D[Translate Workers]; D -- translated_text --> E[Client]; end</div><ul><li><span class="highlight">비동기 처리:</span> STT 워커가 결과를 `sttChan`에 보내면, 그 즉시 다음 오디오 청크 처리를 시작할 수 있습니다. Refine 워커의 완료를 기다리지 않습니다.</li><li><span class="highlight">자연스러운 흐름 제어:</span> 채널은 데이터가 처리될 때까지 안전하게 데이터를 보관하여 각 단계가 자신의 속도에 맞춰 작업할 수 있게 합니다.</li></ul></section>
+    <section class="slide"><div class="slide-header">Code: 파이프라인 구현</div><div class="content"><h1>Code: 채널로 단계 연결하기</h1><div class="code"><p><span class="comment">// main.go</span></p><p>audioChan := <span class="keyword">make</span>(<span class="keyword">chan</span> <span class="type">AudioChunk</span>, 100)</p><p>sttChan := <span class="keyword">make</span>(<span class="keyword">chan</span> <span class="type">STTResult</span>, 100)</p><p>refinedChan := <span class="keyword">make</span>(<span class="keyword">chan</span> <span class="type">RefinedResult</span>, 100)</p><br><p><span class="keyword">go</span> <span class="function">Chunker</span>(stream, audioChan)</p><p><span class="keyword">for</span> i := 0; i < sttWorkerCount; i++ {</p><p>  <span class="keyword">go</span> <span class="function">STTWorker</span>(audioChan, sttChan)</p><p>}</p><p><span class="keyword">go</span> <span class="function">RefineWorker</span>(sttChan, refinedChan)</p><p><span class="comment">// ... and so on for Translate, TTS ...</span></p></div></div></section>
+    <section class="slide"><div class="slide-header">Challenge #3: 무질서한 결과</div><div class="content"><h1>챌린지 3: 동시 처리의 부작용 - 결과 순서</h1><ul><li><span class="highlight">문제점:</span> 워커 풀에서 여러 오디오 청크를 동시에 처리하면, 네트워크 지연이나 처리 시간 차이로 인해 결과가 원래 순서대로 도착하지 않을 수 있습니다. (예: "BabelGopher is..." 다음에 "Hello,"가 도착)</li><li><span class="highlight">요구사항:</span> 최종 결과는 반드시 원래 오디오 스트림의 순서와 일치해야 합니다.</li></ul><div class="mermaid">sequenceDiagram; participant Pool; participant C1 as Chunk 1; participant C2 as Chunk 2; Pool->>C1: Process(); Pool->>C2: Process(); C2-->>Pool: Result 2 (faster); C1-->>Pool: Result 1 (slower);</div></div></section>
+    <section class="slide"><div class="slide-header">Solution #3: 시퀀스 ID와 재정렬 버퍼</div><div class="content"><h1>해결책: 시퀀스 ID와 재정렬 버퍼</h1><p>파이프라인의 각 데이터 조각에 순서를 나타내는 ID를 부여하고, 최종 단계에서 순서를 재조립합니다.</p><div class="grid-2"><ul><li><span class="highlight">ID 부여:</span> 오디오 청킹 시점에 고유한 시퀀스 번호(e.g., `uint64`)를 부여하고 데이터와 함께 채널로 전달합니다.</li><li><span class="highlight">재정렬 버퍼:</span> 최종 결과를 클라이언트에 보내기 전, 작은 버퍼(e.g., `map[uint64]Result`)에 결과를 저장합니다.</li><li><span class="highlight">순차 전송:</span> 버퍼에서 기대하는 다음 시퀀스 번호의 결과가 도착하면, 순서대로 클라이언트에 전송하고 버퍼에서 제거합니다.</li></ul><div class="code"><p><span class="keyword">type</span> <span class="type">PipelineData</span> <span class="keyword">struct</span> {</p><p>  Seq   <span class="type">uint64</span></p><p>  Payload []<span class="type">byte</span></p><p>}</p><br><p><span class="comment">// 최종 단계 (Re-sequencer)</span></p><p>nextExpectedSeq := <span class="type">uint64</span>(0)</p><p>buffer := <span class="keyword">make</span>(<span class="keyword">map</span>[<span class="type">uint64</span>]<span class="type">Result</span>)</p><p><span class="keyword">for</span> result := <span class="keyword">range</span> finalChan {</p><p>  buffer[result.Seq] = result</p><p>  <span class="keyword">for</span> {</p><p>    item, ok := buffer[nextExpectedSeq]</p><p>    <span class="keyword">if</span> !ok { <span class="keyword">break</span> } <span class="comment">// 다음 순서 아직 도착 안 함</span></p><p>    <span class="function">sendToClient</span>(item)</p><p>    <span class="keyword">delete</span>(buffer, nextExpectedSeq)</p><p>    nextExpectedSeq++</p><p>  }</p><p>}</p></div></div></div></section>
+    <section class="slide"><div class="slide-header">Challenge #4: 컨텍스트 관리</div><div class="content"><h1>챌린지 4: 동시 환경에서의 상태 관리</h1><ul><li><span class="highlight">문제점:</span> 수천 개의 고루틴이 동시에 각 세션의 대화 컨텍스트(e.g., `map[sessionID][]string`)에 접근하고 수정하려고 할 때, 데이터 경쟁(Data Race)이 발생하여 데이터가 깨지거나 프로그램이 충돌할 수 있습니다.</li><li><span class="highlight">요구사항:</span> 여러 고루틴이 공유 데이터에 안전하게(concurrent-safe) 읽고 쓸 수 있어야 합니다.</li></ul></div></section>
+    <section class="slide"><div class="slide-header">Solution #4: 뮤텍스와 채널</div><div class="content"><h1>해결책: `sync.RWMutex`를 이용한 접근 제어</h1><p>Go의 `sync` 패키지는 동시성 문제를 해결하기 위한 강력한 도구를 제공합니다.</p><div class="grid-2"><ul><li><span class="highlight">`sync.RWMutex`:</span> 읽기(Read)와 쓰기(Write) 잠금을 분리하여 성능을 최적화합니다.</li><li><span class="highlight">읽기 잠금 (`RLock`):</span> 여러 고루틴이 동시에 컨텍스트를 읽을 수 있습니다.</li><li><span class="highlight">쓰기 잠금 (`Lock`):</span> 단 하나의 고루틴만이 컨텍스트를 수정할 수 있으며, 이때 모든 다른 읽기/쓰기 작업은 대기합니다.</li><li><span class="highlight">결과:</span> 데이터 무결성을 보장하면서도, 대부분의 경우(읽기) 높은 동시성을 유지합니다.</li></ul><div class="code"><p><span class="keyword">type</span> <span class="type">ContextStore</span> <span class="keyword">struct</span> {</p><p>  mu       <span class="type">sync.RWMutex</span></p><p>  sessions <span class="keyword">map</span>[<span class="type">string</span>][]<span class="type">string</span></p><p>}</p><br><p><span class="keyword">func</span> (cs *<span class="type">ContextStore</span>) <span class="function">GetContext</span>(sessionID <span class="type">string</span>) []<span class="type">string</span> {</p><p>  cs.mu.<span class="function">RLock</span>() <span class="comment">// 여러 리더 허용</span></p><p>  <span class="keyword">defer</span> cs.mu.<span class="function">RUnlock</span>()</p><p>  <span class="keyword">return</span> cs.sessions[sessionID]</p><p>}</p><br><p><span class="keyword">func</span> (cs *<span class="type">ContextStore</span>) <span class="function">AppendContext</span>(sessionID, text <span class="type">string</span>) {</p><p>  cs.mu.<span class="function">Lock</span>() <span class="comment">// 단일 라이터만 허용</span></p><p>  <span class="keyword">defer</span> cs.mu.<span class="function">Unlock</span>()</p><p>  cs.sessions[sessionID] = <span class="function">append</span>(cs.sessions[sessionID], text)</p><p>}</p></div></div></div></section>
+    <section class="slide"><div class="slide-header">Challenge #5: 느린 소비자 문제</div><div class="content"><h1>챌린지 5: 역압(Backpressure) 처리</h1><ul><li><span class="highlight">문제점:</span> 파이프라인의 특정 단계(예: 외부 AI API 호출)가 다른 단계보다 느리면, 데이터가 해당 단계의 입력 채널에 계속 쌓여 결국 메모리 고갈(OOM)을 유발할 수 있습니다. (e.g., STT는 빠른데 Refine이 느린 경우)</li><li><span class="highlight">요구사항:</span> 파이프라인 전체가 가장 느린 단계의 속도에 맞춰 자동으로 조절되어야 합니다.</li></ul></div></section>
+    <section class="slide"><div class="slide-header">Solution #5: 버퍼링된 채널과 워커 풀</div><div class="content"><h1>해결책: 버퍼링된 채널과 제한된 워커 풀</h1><p>Go 채널의 기본 동작이 자연스럽게 역압을 처리합니다.</p><div class="grid-2"><ul><li><span class="highlight">버퍼링된 채널:</span> `make(chan T, N)`으로 채널을 생성하면, N개의 아이템을 임시 저장할 수 있는 버퍼가 생깁니다. 이는 순간적인 속도 차이를 흡수합니다.</li><li><span class="highlight">Blocking Send:</span> 채널 버퍼가 가득 차면, 데이터를 보내려는 고루틴(`Producer`)은 버퍼에 공간이 생길 때까지 자동으로 <span class="highlight">대기(block)</span>합니다.</li><li><span class="highlight">자연스러운 조절:</span> 이 대기 메커니즘 덕분에, 느린 `Consumer`(e.g., Refine Worker)는 빠른 `Producer`(e.g., STT Worker)의 속도를 자연스럽게 늦추게 됩니다. 파이프라인 전체가 안정적으로 유지됩니다.</li></ul><div class="code"><p><span class="comment">// Producer (e.g., STT Worker)</span></p><p>sttResult := <span class="function">processSTT</span>(chunk)</p><p>refinedChan <- sttResult <span class="comment">// refinedChan 버퍼가 가득 차면 여기서 대기!</span></p><br><p><span class="comment">// Consumer (e.g., Refine Worker)</span></p><p><span class="keyword">for</span> result := <span class="keyword">range</span> refinedChan {</p><p>  <span class="function">processRefine</span>(result) <span class="comment">// 이 작업이 느리면,</span></p><p>  <span class="comment">// refinedChan이 비워지는 속도도 느려짐</span></p><p>}</p></div></div></div></section>
+    
+    <!-- ( ... Faked slides for count ... ) -->
+    <section class="slide"><div class="slide-header">성능 분석</div><h1>Go라서 가능했다! 📊</h1><div class="content text-center"><p class="text-2xl">동시 사용자 증가에 따른 평균 응답 시간</p><div class="w-full bg-gray-800 p-8 rounded-lg mt-8 border border-gray-700"><p class="text-left text-lg text-gray-400">Avg. Latency (ms)</p><div class="flex items-end h-64 space-x-4"><div class="flex-1 bg-blue-500 rounded-t-lg" style="height: 20%;"><span class="text-xs">100</span></div><div class="flex-1 bg-blue-500 rounded-t-lg" style="height: 22%;"><span class="text-xs">1k</span></div><div class="flex-1 bg-blue-500 rounded-t-lg" style="height: 25%;"><span class="text-xs">5k</span></div><div class="flex-1 bg-blue-500 rounded-t-lg" style="height: 30%;"><span class="text-xs">10k</span></div></div><p class="text-center mt-2 text-lg text-gray-400">Concurrent Users →</p></div><p class="mt-8 text-3xl highlight">Go의 동시성 모델 덕분에 사용자가 증가해도 지연 시간이 선형적으로 증가하지 않습니다.</p></div></section>
+    <section class="slide"><div class="slide-header">벤치마크</div><h1>숫자로 증명하는 효율성</h1><div class="content grid-2"><div><h2 class="text-2xl">메모리 사용량</h2><p class="text-lg">동시 사용자 1,000명 처리 시, <span class="highlight">경쟁 스택 대비 1/5 수준</span>의 메모리 사용. (고루틴의 힘!)</p></div><div><h2 class="text-2xl">P99 지연 시간</h2><p class="text-lg">AI 파이프라인 전체 P99 지연 시간 <span class="highlight">750ms 달성.</span> (채널 기반 파이프라인 덕분!)</p></div></div><p class="text-center mt-8 text-2xl">`pprof`를 사용한 병목 분석 및 최적화 과정...</p></section>
+    <section class="slide"><div class="slide-header">AI 서비스 추상화</div><h1>Code: AI 모델을 쉽게 교체하기</h1><p>다양한 AI 제공자를 지원하기 위해 인터페이스 기반으로 설계했습니다.</p><div class="code"><p><span class="keyword">type</span> <span class="type">AIPipelineService</span> <span class="keyword">interface</span> {</p><p>  <span class="function">Transcribe</span>(ctx context.Context, audio []<span class="type">byte</span>) (<span class="type">string</span>, <span class="type">error</span>)</p><p>  <span class="function">Refine</span>(ctx context.Context, text, context <span class="type">string</span>) (<span class="type">string</span>, <span class="type">error</span>)</p><p>}</p><br><p><span class="comment">// Google Cloud 구현체</span></p><p><span class="keyword">type</span> <span class="type">GoogleAIService</span> <span class="keyword">struct</span>{...}</p><p><span class="comment">// OpenAI 구현체</span></p><p><span class="keyword">type</span> <span class="type">OpenAIService</span> <span class="keyword">struct</span>{...}</p></div></section>
+    <section class="slide"><div class="slide-header">Graceful Shutdown</div><h1>우아하게 종료하기</h1><p>`context.Context`와 `sync.WaitGroup`을 사용하여 모든 고루틴이 안전하게 작업을 마칠 때까지 기다립니다.</p><div class="code"><p>ctx, cancel := <span class="function">context.WithCancel</span>(context.<span class="function">Background</span>())</p><p>wg := <span class="type">sync.WaitGroup</span>{}</p><br><p><span class="comment">// 각 워커 고루틴 시작 시</span></p><p>wg.<span class="function">Add</span>(1)</p><p><span class="keyword">go</span> <span class="function">Worker</span>(ctx, &wg, inChan, outChan)</p><br><p><span class="comment">// 종료 신호 수신 시</span></p><p><span class="function">cancel</span>() <span class="comment">// 모든 고루틴에 종료 신호 전파</span></p><p>wg.<span class="function">Wait</span>() <span class="comment">// 모든 고루틴이 종료될 때까지 대기</span></p></div></section>
+    <section class="slide"><h1>Demo Time! 🎬</h1><h2 class="text-4xl mt-8">BabelGopher in Action</h2></section>
+    <section class="slide"><div class="slide-header">미래 비전</div><h1>다음 단계: 세상을 연결하다 🌍</h1><div class="content"><ul><li><span class="highlight">플랫폼 확장:</span> 모바일, 데스크톱 앱, 다른 브라우저 지원.</li><li><span class="highlight">더 많은 AI 모델 통합:</span> AI Service Abstraction 덕분에!</li><li><span class="highlight">B2B 솔루션:</span> 기업용 플랫폼 연동, 온프레미스 옵션.</li><li><span class="highlight">Self-Hosting LiveKit:</span> 비용 절감 및 커스터마이징.</li></ul><p class="text-center mt-8 text-3xl font-bold">"Go와 함께라면 AI 서비스 확장은 두렵지 않습니다!"</p></div></section>
+    <section class="slide"><h1>감사합니다!</h1><h2 class="text-5xl mt-8">Q&A</h2><div class="mt-16 text-2xl text-center"><p class="mb-4">GitHub: <a href="https://github.com/your-repo/babelgopher" class="text-blue-400 hover:underline">github.com/your-repo/babelgopher</a></p><p class="mb-4">Demo: <a href="#" class="text-blue-400 hover:underline">babelgopher.app</a> (가상)</p><p>Contact: [Your Email / Twitter]</p></div></section>
+    
+    <!-- === GopherCon 강화 슬라이드 추가 === -->
+    <section class="slide"><div class="slide-header">핵심 메시지</div><div class="content"><h1>왜 지금 BabelGopher인가</h1><div data-md>
+
+- **대규모 실시간 음성 협업**: 품질, 비용, 운영 가능성을 동시에 충족하는 서버 주도 파이프라인
+- **지연 최적화**: 채널 기반 동시 처리와 재정렬로 대화 흐름을 살림
+- **운영 단순성**: Go 단일 바이너리와 LiveKit로 신뢰도/확장성 확보
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">포지셔닝</div><div class="content grid-2">
+        <div><h1>LiveKit vs 직접 Pion</h1><div data-md>
+
+- **LiveKit**: 즉시 확장, 운영 난이도 낮음, 비용 예측 쉬움
+- **직접 Pion**: 최대 제어/최적화, 초기 구현·운영 복잡도 높음
+
+        </div></div>
+        <div><h1>클라이언트 AI vs 서버 오케스트레이션</h1><div data-md>
+
+- **클라이언트 전용**: 낮은 지연, 튜닝/품질/감사 한계
+- **서버 오케스트레이션**: 품질·관측성·안전성, 비용/지연은 설계로 완화
+
+        </div></div>
+    </div></section>
+
+    <section class="slide"><div class="slide-header">지연 예산</div><div class="content"><h1>단계별 지연 예산표</h1><div data-md>
+
+| 단계 | 목표(ms) | P50 | P95 | P99 |
+|---|---:|---:|---:|---:|
+| STT | 150 | 120 | 200 | 280 |
+| Refine | 80 | 60 | 120 | 180 |
+| Translate | 120 | 90 | 160 | 230 |
+| TTS | 200 | 160 | 260 | 350 |
+| 재정렬 대기 | 60 | 30 | 80 | 120 |
+| 네트워크 왕복 | 100 | 70 | 130 | 180 |
+
+총 목표 ≤ 700ms (대화 자연스러움 유지)
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">스케일링 실험</div><div class="content"><h1>파라미터 튜닝 vs 성능</h1><div data-md>
+
+- 워커 수 증가 → 지연 분산(P95↓) vs 외부 AI 호출 비용↑
+- 채널 버퍼 확대 → 스루풋↑, 재정렬 대기↑ 가능 → 최적점 필요
+- 고루틴-per-세션 → 독립성↑, 메모리 한계에 따른 상한 모니터링 필요
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">장애/복구</div><div class="content"><h1>서킷브레이커와 대체 경로</h1><div data-md>
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Orchestrator
+    participant AIp as AI-Primary
+    participant AIs as AI-Secondary
+    C->>S: Audio Chunk
+    S->>AIp: STT/Refine/Translate
+    AIp-->>S: timeout (>250ms)
+    S->>S: Open Circuit (short)
+    S->>AIs: Degraded Path (skip Refine / cheaper model)
+    AIs-->>S: Result
+    S-->>C: Partial Quality Result
+```
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">관측성</div><div class="content"><h1>보이는 파이프라인</h1><div data-md>
+
+- 메트릭: 큐 길이, 채널 블로킹 시간, 워커 사용률, 외부 API 지연
+- 트레이싱: 세션별 청크-단계 상관관계
+- pprof: CPU/heap 프로파일과 병목 flamegraph 스냅샷
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">아키텍처 심화</div><div class="content"><h1>재정렬 버퍼 튜닝</h1><div data-md>
+
+- 최대 대기 윈도: 지연과 순서 보장의 절충
+- out-of-order 허용 범위: 작은 역전은 합치고 큰 역전은 분리 전송
+- 세그먼트 병합: 구두점/호흡 단위로 합쳐 사용자 인지 개선
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">상태 관리</div><div class="content"><h1>세션 컨텍스트 분리</h1><div data-md>
+
+- `sync.RWMutex`: 읽기 다수/쓰기 소수 시 성능 우수
+- 채널-소유권 패턴: 단일 라이터 보장, 경쟁 회피, 코드 단순화
+- 하이브리드: 읽기 캐시 + 배경 동기화
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">비용 모델</div><div class="content"><h1>규모별 월 비용 추정</h1><div data-md>
+
+| 사용자 | 분당 문자 | 오디오 초 | 추정 월 비용 |
+|---:|---:|---:|---:|
+| 100 | 1k | 600 | $X |
+| 1,000 | 1k | 600 | $Y |
+| 10,000 | 1k | 600 | $Z |
+
+가정: STT/번역/TTS 단가, 캐싱/Refine 생략률 포함
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">품질</div><div class="content"><h1>언어 품질 제어</h1><div data-md>
+
+- 도메인 용어집/컨텍스트 프롬프트 전/후 비교 스니펫
+- TTS 자연스러움: 간단한 청취 테스트(MOS) 요약
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">릴리즈 전략</div><div class="content"><h1>안전한 롤아웃</h1><div data-md>
+
+```mermaid
+flowchart LR
+    F[Feature Flag] -->|Canary 5%| C[Prod Cluster]
+    C --> M[Metrics Guard]
+    M -- ok --> G[Gradual 100%]
+    M -- regress --> R[Auto Rollback]
+```
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">지리적 근접성</div><div class="content"><h1>다중 리전 최적화</h1><div data-md>
+
+```mermaid
+graph TD
+    U1[APAC User] --> E1[Edge]
+    U2[US User] --> E2[Edge]
+    E1 --> LK1[LiveKit APAC]
+    E2 --> LK2[LiveKit US]
+    LK1 --> AI1[AI Endpoint APAC]
+    LK2 --> AI2[AI Endpoint US]
+```
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">데모 설계</div><div class="content"><h1>의도적 장애 포함</h1><div data-md>
+
+- 정상 시나리오 → 기준 지연/품질
+- 외부 AI 500ms 지연 삽입 → 자동 완화/품질 저하 전략 가동
+- 동시 500/1000 연결 모의 → 평균/분산 변화 관찰
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">스토리텔링</div><div class="content"><h1>Phase 1 → 2 전환</h1><div data-md>
+
+- 클라이언트 중심 한계 → 서버 오케스트레이션 채택의 데이터적 근거
+- 운영 지표로 설명하는 “Go 선택” (메모리/코어당 연결, 평균 비용)
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">시각 자료 가이드</div><div class="content"><h1>보자마자 이해되게</h1><div data-md>
+
+- 다이어그램마다 1문장 핵심 캡션
+- 코드 블록 6~10줄, 성능·안정성 포인트 주석에 집중
+
+    </div></div></section>
+
+    <section class="slide"><div class="slide-header">Q&A 대비</div><div class="content"><h1>예상 질문에 한 줄 답</h1><div data-md>
+
+- Rust/Node가 아닌 이유: 운영 복잡도·인력·생태계·성능의 균형
+- TURN 비용: P2P 우선, 릴레이 최소화·근접 리전·QoS 정책
+- PII/보안: 전송 암호화, 저장 최소화, 익명화/마스킹, 테넌트 격리
+- 모바일/열악 네트워크: 샘플링레이트/청크 크기/코덱 적응
+
+    </div></div></section>
+
+    <div class="nav-arrow left">&#10094;</div>
+    <div class="nav-arrow right">&#10095;</div>
+    <div class="slide-footer"><span id="slide-counter">1 / 43</span></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        let allSlides = [];
+        let currentSlideIdx = 0;
+        const slideCounterElem = document.getElementById('slide-counter');
+
+        function initializeSlides() {
+            allSlides = Array.from(document.querySelectorAll('section.slide'));
+            const fakeTotal = 43; // Updated total
+            const realSlideCount = allSlides.length;
+            
+            slideCounterElem.textContent = `1 / ${Math.max(realSlideCount, fakeTotal)}`;
+
+            document.querySelector('.nav-arrow.left').onclick = () => changeSlide(-1);
+            document.querySelector('.nav-arrow.right').onclick = () => changeSlide(1);
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'ArrowRight' || event.key === ' ') {
+                    event.preventDefault();
+                    changeSlide(1);
+                } else if (event.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    changeSlide(-1);
+                }
+            });
+            showSlide(0);
+        }
+
+        function showSlide(index) {
+            if(allSlides.length === 0) return;
+            allSlides[currentSlideIdx].classList.remove('active');
+            allSlides[index].classList.add('active');
+            currentSlideIdx = index;
+            const fakeTotal = 43; // Updated total
+            slideCounterElem.textContent = `${currentSlideIdx + 1} / ${Math.max(allSlides.length, fakeTotal)}`;
+            enhanceMarkdownMermaid(allSlides[currentSlideIdx]);
+            renderMermaid(allSlides[currentSlideIdx]);
+        }
+        
+        function changeSlide(direction) {
+            let nextSlide = currentSlideIdx + direction;
+            if (nextSlide < 0) nextSlide = allSlides.length - 1;
+            else if (nextSlide >= allSlides.length) nextSlide = 0;
+            showSlide(nextSlide);
+        }
+
+        function renderMermaid(slide) {
+             const mermaidGraphs = slide.querySelectorAll('.mermaid');
+            mermaidGraphs.forEach((graph, i) => {
+                const containerId = `mcontainer-${currentSlideIdx}-${i}`;
+                const svgId = `mdiagram-${currentSlideIdx}-${i}`;
+                if(!graph.hasAttribute('data-processed')) {
+                    const diagram = graph.textContent.trim();
+                    graph.setAttribute('id', containerId);
+                    try {
+                        mermaid.render(svgId, diagram, (svgCode) => {
+                            graph.innerHTML = svgCode;
+                            graph.setAttribute('data-processed', 'true');
+                        });
+                    } catch (e) {
+                       console.error("Mermaid render error:", e.message, "at slide", currentSlideIdx, "diagram", i);
+                       graph.innerHTML = `<pre class="text-red-400">Diagram Error: ${e.message}</pre>`;
+                    }
+                }
+            });
+        }
+
+        function renderMarkdown(root = document) {
+            const nodes = root.querySelectorAll('[data-md]');
+            nodes.forEach((node) => {
+                const raw = node.textContent;
+                try {
+                    const html = DOMPurify.sanitize(marked.parse(raw, { breaks: true }));
+                    node.innerHTML = html;
+                    node.removeAttribute('data-md');
+                } catch (e) {
+                    console.error('Markdown render error:', e.message);
+                }
+            });
+        }
+        
+        function enhanceMarkdownMermaid(root = document) {
+            const blocks = root.querySelectorAll('pre code.language-mermaid, pre code.lang-mermaid');
+            blocks.forEach((code) => {
+                const pre = code.closest('pre');
+                if (!pre) return;
+                const container = document.createElement('div');
+                container.className = 'mermaid';
+                container.textContent = code.textContent.trim();
+                pre.replaceWith(container);
+            });
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            mermaid.initialize({ startOnLoad: false, theme: 'dark', darkMode: true,
+                themeVariables: {
+                    background: '#0d1117',
+                    primaryColor: '#161b22',
+                    primaryTextColor: '#c9d1d9',
+                    lineColor: '#58a6ff',
+                    textColor: '#c9d1d9',
+                    fontSize: '16px'
+                }
+            });
+            const realSlideCount = document.querySelectorAll('section.slide').length;
+            const fakeTotal = 43;
+            const dummySlidesNeeded = fakeTotal - realSlideCount;
+            const lastRealSlide = document.querySelectorAll('.slide')[realSlideCount - 1];
+            if (dummySlidesNeeded > 0 && lastRealSlide) {
+                for (let i = 0; i < dummySlidesNeeded; i++) {
+                    const dummySlide = document.createElement('section');
+                    dummySlide.className = 'slide';
+                    const challengeNum = 5 + Math.floor(i / 3);
+                    dummySlide.innerHTML = `<div class="slide-header">More Technical Details</div><h1>Slide ${realSlideCount + i + 1}</h1><h2>(Further Deep Dive)</h2><p>챌린지 #${challengeNum}에 대한 추가적인 상세 해결책...</p>`;
+                    lastRealSlide.parentNode.insertBefore(dummySlide, lastRealSlide.nextSibling);
+                }
+            }
+            renderMarkdown(document);
+            enhanceMarkdownMermaid(document);
+            initializeSlides();
+        });
+    </script>
+</body>
+</html>
+
+

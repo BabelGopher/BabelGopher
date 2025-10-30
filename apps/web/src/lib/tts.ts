@@ -4,8 +4,8 @@
  */
 
 export interface TTSOptions {
-  rate?: number;   // Speaking rate (0.1-10, default 1.0)
-  pitch?: number;  // Voice pitch (0-2, default 1.0)
+  rate?: number; // Speaking rate (0.1-10, default 1.0)
+  pitch?: number; // Voice pitch (0-2, default 1.0)
   volume?: number; // Volume (0-1, default 0.75)
 }
 
@@ -23,6 +23,27 @@ export class TTSService {
   private static voices: SpeechSynthesisVoice[] = [];
   private static isInitialized = false;
   private static initPromise: Promise<void> | null = null;
+  
+  /**
+   * Normalize 2-letter language codes to common BCP-47 variants
+   */
+  private static normalizeLang(code: string): string {
+    if (!code) return "en-US";
+    if (code.includes("-")) return code;
+    const map: Record<string, string> = {
+      en: "en-US",
+      ko: "ko-KR",
+      ja: "ja-JP",
+      zh: "zh-CN",
+      es: "es-ES",
+      fr: "fr-FR",
+      de: "de-DE",
+      it: "it-IT",
+      pt: "pt-PT",
+      ru: "ru-RU",
+    };
+    return map[code] || code;
+  }
 
   /**
    * Initialize TTS service and load available voices
@@ -35,37 +56,74 @@ export class TTSService {
     }
 
     // Skip if already initialized or Speech Synthesis not available
-    if (this.isInitialized || typeof window === 'undefined' || !window.speechSynthesis) {
+    if (
+      this.isInitialized ||
+      typeof window === "undefined" ||
+      !window.speechSynthesis
+    ) {
       return Promise.resolve();
     }
 
     this.initPromise = new Promise<void>((resolve) => {
-      // Load voices immediately if available
-      this.voices = window.speechSynthesis.getVoices();
+      const synth = window.speechSynthesis;
 
-      if (this.voices.length > 0) {
+      const finalize = (reason: string) => {
         this.isInitialized = true;
-        console.log(`[TTSService] Initialized with ${this.voices.length} voices`);
+        console.log(`[TTSService] Initialized (${reason}) with ${this.voices.length} voices`);
         resolve();
-      } else {
-        // Subscribe to voiceschanged event for async voice loading
-        window.speechSynthesis.onvoiceschanged = () => {
-          this.voices = window.speechSynthesis.getVoices();
-          this.isInitialized = true;
-          console.log(`[TTSService] Voices loaded: ${this.voices.length} available`);
-          resolve();
-        };
+      };
 
-        // Fallback timeout in case voiceschanged never fires
-        setTimeout(() => {
-          if (!this.isInitialized) {
-            this.voices = window.speechSynthesis.getVoices();
-            this.isInitialized = true;
-            console.warn(`[TTSService] Voices loaded via timeout: ${this.voices.length} available`);
-            resolve();
-          }
-        }, 1000);
+      const setVoices = () => {
+        try {
+          this.voices = synth.getVoices();
+        } catch {
+          this.voices = [];
+        }
+      };
+
+      const onVoicesChanged = () => {
+        setVoices();
+        // Resolve when real voices are available
+        if (this.voices.length > 0) {
+          // Cleanup listener(s)
+          try {
+            (synth as any).removeEventListener?.("voiceschanged", onVoicesChanged);
+          } catch {}
+          // Also clear property handler if set
+          try {
+            (synth as any).onvoiceschanged = null;
+          } catch {}
+          finalize("voiceschanged");
+        }
+      };
+
+      // Initial attempt
+      setVoices();
+      if (this.voices.length > 0) {
+        finalize("immediate");
+        return;
       }
+
+      // Attach both property and event listener for maximum compatibility
+      try {
+        (synth as any).addEventListener?.("voiceschanged", onVoicesChanged);
+      } catch {}
+      try {
+        (synth as any).onvoiceschanged = onVoicesChanged;
+      } catch {}
+
+      // Fallback timeout in case voiceschanged never fires (Safari quirks)
+      const timeoutMs = 2000;
+      setTimeout(() => {
+        if (!this.isInitialized) {
+          setVoices();
+          // Do not depend on event forever; resolve so callers can poll capabilities
+          try {
+            (synth as any).removeEventListener?.("voiceschanged", onVoicesChanged);
+          } catch {}
+          finalize("timeout");
+        }
+      }, timeoutMs);
     });
 
     return this.initPromise;
@@ -75,16 +133,16 @@ export class TTSService {
    * Check if TTS is available in the browser
    */
   public static checkCapabilities(): TTSCapabilities {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
+    if (typeof window === "undefined" || !window.speechSynthesis) {
       return {
         isAvailable: false,
         voiceCount: 0,
-        error: 'Speech Synthesis API not available in this browser',
+        error: "Speech Synthesis API not available in this browser",
       };
     }
 
     return {
-      isAvailable: true,
+      isAvailable: this.voices.length > 0,
       voiceCount: this.voices.length,
     };
   }
@@ -98,40 +156,47 @@ export class TTSService {
    */
   private static findBestVoice(lang: string): SpeechSynthesisVoice | null {
     if (this.voices.length === 0) {
-      console.warn('[TTSService] No voices available');
+      console.warn("[TTSService] No voices available");
       return null;
     }
 
     // Extract base language (e.g., 'en' from 'en-US')
-    const baseLang = lang.split('-')[0];
+    const normalized = this.normalizeLang(lang);
+    const baseLang = normalized.split("-")[0];
 
     // Priority 1: Non-local (cloud) voice with exact language match
-    let voice = this.voices.find(v => v.lang === lang && !v.localService);
+    let voice = this.voices.find((v) => v.lang === normalized && !v.localService);
 
     // Priority 2: Google voice with exact language match (high quality)
     if (!voice) {
-      voice = this.voices.find(v => v.lang === lang && v.name.includes('Google'));
+      voice = this.voices.find(
+        (v) => v.lang === normalized && v.name.includes("Google")
+      );
     }
 
     // Priority 3: Any voice with exact language match
     if (!voice) {
-      voice = this.voices.find(v => v.lang === lang);
+      voice = this.voices.find((v) => v.lang === normalized);
     }
 
     // Priority 4: Non-local voice with base language match
     if (!voice) {
-      voice = this.voices.find(v => v.lang.startsWith(baseLang) && !v.localService);
+      voice = this.voices.find(
+        (v) => v.lang.startsWith(baseLang) && !v.localService
+      );
     }
 
     // Priority 5: Any voice with base language match
     if (!voice) {
-      voice = this.voices.find(v => v.lang.startsWith(baseLang));
+      voice = this.voices.find((v) => v.lang.startsWith(baseLang));
     }
 
     // Fallback: Use default voice
     if (!voice) {
-      voice = this.voices.find(v => v.default) || this.voices[0];
-      console.warn(`[TTSService] No voice found for ${lang}, using fallback: ${voice?.name}`);
+      voice = this.voices.find((v) => v.default) || this.voices[0];
+      console.warn(
+        `[TTSService] No voice found for ${lang}, using fallback: ${voice?.name}`
+      );
     }
 
     return voice || null;
@@ -146,10 +211,16 @@ export class TTSService {
    * @param options - Optional TTS settings (rate, pitch, volume)
    * @returns Promise that resolves when speech completes
    */
-  public static speak(text: string, lang: string, options: TTSOptions = {}): Promise<void> {
+  public static speak(
+    text: string,
+    lang: string,
+    options: TTSOptions = {}
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!this.isInitialized) {
-        reject(new Error('TTSService not initialized. Call initialize() first.'));
+        reject(
+          new Error("TTSService not initialized. Call initialize() first.")
+        );
         return;
       }
 
@@ -157,6 +228,13 @@ export class TTSService {
         resolve(); // Nothing to speak
         return;
       }
+
+      // Attempt to resume if the synth is paused due to autoplay policy
+      try {
+        if (typeof window !== "undefined" && window.speechSynthesis?.paused) {
+          window.speechSynthesis.resume();
+        }
+      } catch {}
 
       // Cancel any ongoing speech to implement cancel-and-replace strategy
       this.cancel();
@@ -170,14 +248,17 @@ export class TTSService {
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.voice = voice;
-      utterance.lang = lang;
+      // Use the selected voice's language for best compatibility
+      utterance.lang = voice.lang;
       utterance.rate = options.rate ?? 1.0;
       utterance.pitch = options.pitch ?? 1.0;
       utterance.volume = options.volume ?? 0.75; // Default 75% volume to prevent echo
 
       // Event handlers
       utterance.onstart = () => {
-        console.log(`[TTSService] Speaking: "${text.substring(0, 50)}..." (${lang})`);
+        console.log(
+          `[TTSService] Speaking: "${text.substring(0, 50)}..." (${lang})`
+        );
       };
 
       utterance.onend = () => {
@@ -186,7 +267,25 @@ export class TTSService {
       };
 
       utterance.onerror = (event) => {
-        console.error('[TTSService] Speech error:', event);
+        // Ignore 'interrupted' and 'canceled' errors as they're expected
+        if (event.error === "interrupted" || event.error === "canceled") {
+          console.log(`[TTSService] Speech ${event.error}`);
+          resolve();
+          return;
+        }
+
+        // Handle audio-hardware errors gracefully
+        if (event.error === "audio-hardware" || event.error === "audio-busy") {
+          console.warn("[TTSService] Audio device error:", event.error);
+          console.warn(
+            "[TTSService] This may be due to no audio output device or device permissions"
+          );
+          // Don't reject - allow app to continue
+          resolve();
+          return;
+        }
+
+        console.error("[TTSService] Speech error:", event.error, event);
         reject(new Error(`Speech synthesis error: ${event.error}`));
       };
 
@@ -199,7 +298,7 @@ export class TTSService {
    * Stop any ongoing speech synthesis
    */
   public static cancel(): void {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
   }
@@ -216,9 +315,9 @@ export class TTSService {
       return this.voices;
     }
 
-    const baseLang = lang.split('-')[0];
-    return this.voices.filter(v =>
-      v.lang === lang || v.lang.startsWith(baseLang)
+    const baseLang = lang.split("-")[0];
+    return this.voices.filter(
+      (v) => v.lang === lang || v.lang.startsWith(baseLang)
     );
   }
 
@@ -226,8 +325,22 @@ export class TTSService {
    * Get recommended voices for each supported language
    * Useful for documentation and testing
    */
-  public static getRecommendedVoices(): Record<string, SpeechSynthesisVoice | null> {
-    const languages = ['en-US', 'ko-KR', 'ja-JP', 'zh-CN', 'es-ES', 'fr-FR', 'de-DE', 'it-IT', 'pt-PT', 'ru-RU'];
+  public static getRecommendedVoices(): Record<
+    string,
+    SpeechSynthesisVoice | null
+  > {
+    const languages = [
+      "en-US",
+      "ko-KR",
+      "ja-JP",
+      "zh-CN",
+      "es-ES",
+      "fr-FR",
+      "de-DE",
+      "it-IT",
+      "pt-PT",
+      "ru-RU",
+    ];
     const recommendations: Record<string, SpeechSynthesisVoice | null> = {};
 
     for (const lang of languages) {

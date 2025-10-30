@@ -1,5 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
-import { TTSService, TTSOptions } from '../lib/tts';
+import { useState, useCallback, useEffect, useRef } from "react";
+import { createComponentLogger } from "../lib/logger";
+const log = createComponentLogger("useTTS");
+import { TTSService, TTSOptions } from "../lib/tts";
 
 /**
  * Message to be spoken by TTS
@@ -32,9 +34,37 @@ export function useTTS(
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [ttsError, setTTSError] = useState<string | null>(null);
   const [isTTSAvailable, setIsTTSAvailable] = useState(false);
+  const optionsRef = useRef<TTSOptions>(options);
+  const queuedRef = useRef<{
+    text: string;
+    lang: string;
+    options?: TTSOptions;
+  } | null>(null);
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   // Initialize TTS service and check availability on mount
   useEffect(() => {
+    // Try to unlock speech synthesis on first user gesture (autoplay policy)
+    const unlock = () => {
+      try {
+        if (typeof window !== "undefined" && window.speechSynthesis) {
+          window.speechSynthesis.resume();
+        }
+        // Re-initialize and re-check voices after user gesture
+        TTSService.initialize().finally(() => {
+          const caps = TTSService.checkCapabilities();
+          setIsTTSAvailable(caps.isAvailable);
+          if (caps.isAvailable) setTTSError(null);
+        });
+      } catch {}
+      document.removeEventListener("pointerdown", unlock);
+      document.removeEventListener("keydown", unlock);
+    };
+    document.addEventListener("pointerdown", unlock, { once: true });
+    document.addEventListener("keydown", unlock, { once: true });
+
     const initTTS = async () => {
       try {
         await TTSService.initialize();
@@ -42,14 +72,16 @@ export function useTTS(
         setIsTTSAvailable(capabilities.isAvailable);
 
         if (!capabilities.isAvailable) {
-          setTTSError(capabilities.error || 'TTS not available');
-          console.warn('[useTTS] TTS not available:', capabilities.error);
+          setTTSError(capabilities.error || "TTS not available");
+          log.warn("TTS not available", { error: capabilities.error });
         } else {
-          console.log(`[useTTS] TTS initialized with ${capabilities.voiceCount} voices`);
+          log.info("TTS initialized", { voices: capabilities.voiceCount });
         }
       } catch (error) {
-        console.error('[useTTS] Initialization failed:', error);
-        setTTSError(error instanceof Error ? error.message : 'TTS initialization failed');
+        log.error("Initialization failed", error as Error);
+        setTTSError(
+          error instanceof Error ? error.message : "TTS initialization failed"
+        );
         setIsTTSAvailable(false);
       }
     };
@@ -59,6 +91,8 @@ export function useTTS(
     // Cleanup: cancel any ongoing speech on unmount
     return () => {
       TTSService.cancel();
+      document.removeEventListener("pointerdown", unlock);
+      document.removeEventListener("keydown", unlock);
     };
   }, []);
 
@@ -66,9 +100,16 @@ export function useTTS(
    * Speak text with specified language and options
    */
   const speak = useCallback(
-    async (text: string, lang: string, speakOptions?: TTSOptions): Promise<void> => {
+    async (
+      text: string,
+      lang: string,
+      speakOptions?: TTSOptions
+    ): Promise<void> => {
+      // If not yet available, queue once and return (will auto-flush on availability)
       if (!isTTSAvailable) {
-        console.warn('[useTTS] TTS not available, skipping speech');
+        const effectiveOptions = speakOptions ?? optionsRef.current;
+        queuedRef.current = { text, lang, options: effectiveOptions };
+        log.warn("TTS not available yet; queued first utterance");
         return;
       }
 
@@ -80,15 +121,18 @@ export function useTTS(
       setTTSError(null);
 
       try {
-        await TTSService.speak(text, lang, speakOptions || options);
+        const effectiveOptions = speakOptions ?? optionsRef.current;
+        await TTSService.speak(text, lang, effectiveOptions);
       } catch (error) {
-        console.error('[useTTS] Speech failed:', error);
-        setTTSError(error instanceof Error ? error.message : 'Speech synthesis failed');
+        log.error("Speech failed", error as Error);
+        setTTSError(
+          error instanceof Error ? error.message : "Speech synthesis failed"
+        );
       } finally {
         setIsSpeaking(false);
       }
     },
-    [isTTSAvailable, options]
+    [isTTSAvailable]
   );
 
   /**
@@ -102,14 +146,31 @@ export function useTTS(
   // Auto-speak when message changes
   useEffect(() => {
     if (message && message.text && isTTSAvailable) {
-      speak(message.text, message.lang, options);
+      speak(message.text, message.lang);
     }
 
     // Cleanup: cancel speech if message changes or component unmounts
     return () => {
       cancel();
     };
-  }, [message?.id, message?.text, message?.lang, isTTSAvailable]); // Only trigger on message.id change
+  }, [
+    message?.id,
+    message?.text,
+    message?.lang,
+    isTTSAvailable,
+    speak,
+    cancel,
+  ]);
+
+  // Flush queued utterance once TTS becomes available
+  useEffect(() => {
+    if (isTTSAvailable && queuedRef.current) {
+      const q = queuedRef.current;
+      queuedRef.current = null;
+      // Fire and forget; errors handled inside speak
+      speak(q.text, q.lang, q.options);
+    }
+  }, [isTTSAvailable, speak]);
 
   return {
     isSpeaking,
@@ -133,13 +194,13 @@ export function useTTSSettings(defaults: TTSOptions = {}) {
   // Load settings from localStorage on mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('babelgopher:ttsSettings');
+      const saved = localStorage.getItem("babelgopher:ttsSettings");
       if (saved) {
         const parsed = JSON.parse(saved);
         setTTSSettings((prev) => ({ ...prev, ...parsed }));
       }
     } catch (error) {
-      console.error('[useTTSSettings] Failed to load settings:', error);
+      console.error("[useTTSSettings] Failed to load settings:", error);
     }
   }, []);
 
@@ -148,9 +209,12 @@ export function useTTSSettings(defaults: TTSOptions = {}) {
     setTTSSettings((prev) => {
       const updated = { ...prev, ...newSettings };
       try {
-        localStorage.setItem('babelgopher:ttsSettings', JSON.stringify(updated));
+        localStorage.setItem(
+          "babelgopher:ttsSettings",
+          JSON.stringify(updated)
+        );
       } catch (error) {
-        console.error('[useTTSSettings] Failed to save settings:', error);
+        console.error("[useTTSSettings] Failed to save settings:", error);
       }
       return updated;
     });
