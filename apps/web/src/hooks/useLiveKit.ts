@@ -144,7 +144,16 @@ export function useLiveKit({
               "Rate limit exceeded. Please wait a minute and try again."
             );
           }
-          throw new Error(`Failed to get access token (${response.status})`);
+          try {
+            const errJson = await response.json();
+            const msg = errJson?.error || JSON.stringify(errJson);
+            throw new Error(
+              msg ? `Failed to get access token (${response.status}): ${msg}` :
+                `Failed to get access token (${response.status})`
+            );
+          } catch {
+            throw new Error(`Failed to get access token (${response.status})`);
+          }
         }
 
         const payload = await response.json();
