@@ -170,6 +170,11 @@ export function useLiveKit({
           (state: ConnectionState) => {
             log.info("Connection state changed", { state });
             setConnectionState(state);
+            // Keep UI loading state in sync with room state transitions
+            setIsConnecting(
+              state === ConnectionState.Connecting ||
+                state === ConnectionState.Reconnecting
+            );
           }
         );
 
