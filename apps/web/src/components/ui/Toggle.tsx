@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 export interface ToggleProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label?: string;
   disabled?: boolean;
+  id?: string;
   'aria-label'?: string;
 }
 
@@ -13,9 +14,11 @@ export function Toggle({
   onChange,
   label,
   disabled = false,
+  id,
   'aria-label': ariaLabel,
 }: ToggleProps) {
-  const toggleId = `toggle-${Math.random().toString(36).substr(2, 9)}`;
+  const autoId = useId();
+  const toggleId = id || `toggle-${autoId}`;
 
   return (
     <div className="flex items-center gap-3">
