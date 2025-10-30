@@ -11,6 +11,8 @@ import { useConferenceOrchestrator } from "../../hooks/useConferenceOrchestrator
 import { useSettings } from "../../hooks/useSettings";
 import { useModals } from "../../hooks/useModals";
 import { useToasts } from "../../hooks/useToasts";
+import { LanguageSelector } from "../../components/LanguageSelector";
+import { TTSService } from "../../lib/tts";
 
 function ConferenceRoomContent() {
   const router = useRouter();
@@ -33,6 +35,24 @@ function ConferenceRoomContent() {
   const [hasStartedTranscription, setHasStartedTranscription] = useState(false);
   // Ensure auto-start runs at most once per mount
   const [autoStartAttempted, setAutoStartAttempted] = useState(false);
+  // Pre-join modal state
+  const [showPrejoin, setShowPrejoin] = useState<boolean>(false);
+  const [prejoinLang, setPrejoinLang] = useState<string>("en");
+
+  // Initialize pre-join visibility once per session and default language
+  useEffect(() => {
+    try {
+      const seen = sessionStorage.getItem("bg:prejoin");
+      setShowPrejoin(!seen);
+    } catch {
+      setShowPrejoin(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Sync default selection from settings
+    setPrejoinLang(selectedLanguage);
+  }, [selectedLanguage]);
 
   // Use the master orchestrator hook
   const {
@@ -52,6 +72,8 @@ function ConferenceRoomContent() {
     capabilities,
     canStartSTT,
     translationDownload,
+    reconnect,
+    startAudio,
   } = useConferenceOrchestrator({
     roomName: (roomName as string) || "default-room",
     participantName: (name as string) || "Anonymous",
@@ -127,6 +149,10 @@ function ConferenceRoomContent() {
   };
 
   const handleToggleTranscription = () => {
+    if (!isConnected) {
+      showWarning("아직 회의실에 연결되지 않았어요. 연결 후 다시 시도해 주세요.");
+      return;
+    }
     if (isTranscribing) {
       stopTranscription();
       setHasStartedTranscription(false);
@@ -152,6 +178,43 @@ function ConferenceRoomContent() {
 
   return (
     <div className="h-screen bg-gray-900 flex flex-col overflow-hidden">
+      {/* Pre-join Modal: Language selection + Audio unlock */}
+      {showPrejoin && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">회의 시작 전에 설정을 완료해 주세요</h2>
+            <div className="mb-4">
+              <LanguageSelector
+                selectedLanguage={prejoinLang}
+                onChange={(code) => setPrejoinLang(code)}
+              />
+            </div>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    // Unlock TTS & audio autoplay
+                    if (typeof window !== "undefined" && window.speechSynthesis) {
+                      try { window.speechSynthesis.resume(); } catch {}
+                    }
+                    try { await TTSService.initialize(); } catch {}
+                    // Apply language
+                    setLanguage(prejoinLang);
+                    // Persist prejoin completion for this tab session
+                    try { sessionStorage.setItem("bg:prejoin", "1"); } catch {}
+                    setShowPrejoin(false);
+                    // Attempt to start audio playout if room already exists
+                    try { await startAudio(); } catch {}
+                  } catch {}
+                }}
+                className="w-full py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700"
+              >
+                오디오 활성화하고 시작하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <ConferenceTopBar roomName={roomName as string} onExit={handleExit} />
 
       <ConferenceMainContent
@@ -203,7 +266,12 @@ function ConferenceRoomContent() {
           </div>
           <button
             onClick={handleToggleTranscription}
-            className="mt-2 text-xs bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded"
+            disabled={!isConnected}
+            className={`mt-2 text-xs px-2 py-1 rounded ${
+              isConnected
+                ? "bg-blue-600 hover:bg-blue-700"
+                : "bg-gray-600 cursor-not-allowed"
+            }`}
           >
             {isTranscribing ? "Stop STT" : "Start STT"}
           </button>
@@ -227,6 +295,19 @@ function ConferenceRoomContent() {
         onClose={closeExitConfirm}
         onConfirm={handleConfirmExit}
       />
+
+      {/* Disconnected Retry Banner */}
+      {!isConnected && !isConnecting && (
+        <div className="absolute bottom-24 right-4 bg-yellow-500 text-black text-sm px-3 py-2 rounded shadow-lg flex items-center gap-3">
+          <span>연결이 원활하지 않아요.</span>
+          <button
+            onClick={() => reconnect()}
+            className="bg-black/20 hover:bg-black/30 text-black font-semibold px-2 py-1 rounded"
+          >
+            재시도
+          </button>
+        </div>
+      )}
     </div>
   );
 }

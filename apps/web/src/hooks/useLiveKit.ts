@@ -113,6 +113,10 @@ export function useLiveKit({
         const useServerToken =
           process.env.NEXT_PUBLIC_USE_SERVER_TOKEN === "true";
         let response: Response;
+        // 12s timeout for token fetch
+        const tokenTimeoutMs = 12000;
+        const tokenAbort = new AbortController();
+        const tokenTimer = setTimeout(() => tokenAbort.abort(), tokenTimeoutMs);
         if (useServerToken) {
           const base = process.env.NEXT_PUBLIC_SERVER_BASE_URL || "";
           response = await fetch(`${base}/auth-livekit-token`, {
@@ -122,14 +126,17 @@ export function useLiveKit({
               room_name: roomName,
               user_identity: participantName,
             }),
+            signal: tokenAbort.signal,
           });
         } else {
           response = await fetch(
             `/api/livekit/token?roomName=${encodeURIComponent(
               roomName
-            )}&participantName=${encodeURIComponent(participantName)}`
+            )}&participantName=${encodeURIComponent(participantName)}`,
+            { signal: tokenAbort.signal }
           );
         }
+        clearTimeout(tokenTimer);
 
         if (!response.ok) {
           if (response.status === 429) {
@@ -226,8 +233,12 @@ export function useLiveKit({
           setConnectionState(ConnectionState.Reconnecting);
         });
 
-        // Connect to room
-        await newRoom.connect(url, token);
+        // Connect to room with 12s timeout
+        const connectTimeoutMs = 12000;
+        const connectTimeout = new Promise<void>((_, reject) => {
+          setTimeout(() => reject(new Error("Connection timed out")), connectTimeoutMs);
+        });
+        await Promise.race([newRoom.connect(url, token), connectTimeout]);
         // Mark connecting complete as soon as the room connection is established
         // so the UI doesn't get stuck if device/audio initialization fails later
         setIsConnecting(false);
@@ -294,7 +305,8 @@ export function useLiveKit({
           !errorMessage.includes("Invalid token") &&
           !errorMessage.includes("400") &&
           !errorMessage.includes("401") &&
-          !errorMessage.includes("403");
+          !errorMessage.includes("403") &&
+          !errorMessage.toLowerCase().includes("timed out");
 
         if (shouldRetry && isRetryableError) {
           const delay = retryDelays[retryCount];
@@ -309,6 +321,16 @@ export function useLiveKit({
 
         // All retries exhausted or non-retryable error
         setIsConnecting(false);
+        // Cleanup any partially established room state
+        try {
+          if (roomRef.current) {
+            await roomRef.current.disconnect();
+            roomRef.current = null;
+            setRoom(null);
+            setParticipants([]);
+            setLocalAudioTrack(null);
+          }
+        } catch {}
 
         if (onError) {
           const friendlyError = new Error(
@@ -439,25 +461,33 @@ export function useLiveKit({
     };
   }, []);
 
+  // Start audio playout on user gesture (autoplay policy)
+  const startPlayout = useCallback(async () => {
+    if (!roomRef.current) return;
+    try {
+      await roomRef.current.startAudio();
+    } catch {}
+  }, []);
+
   return {
     room,
     participants,
     connectionState,
     isConnecting,
     isConnected: connectionState === ConnectionState.Connected,
-    isMuted:
-      (() => {
-        const currentRoom = roomRef.current;
-        if (!currentRoom) return true;
-        const pubs = Array.from(
-          currentRoom.localParticipant?.audioTrackPublications.values() || []
-        ) as LocalTrackPublication[];
-        if (pubs[0]) return pubs[0].isMuted;
-        return localAudioTrack?.isMuted ?? true;
-      })(),
+    isMuted: (() => {
+      const currentRoom = roomRef.current;
+      if (!currentRoom) return true;
+      const pubs = Array.from(
+        currentRoom.localParticipant?.audioTrackPublications.values() || []
+      ) as LocalTrackPublication[];
+      if (pubs[0]) return pubs[0].isMuted;
+      return localAudioTrack?.isMuted ?? true;
+    })(),
     connect,
     disconnect,
     toggleMute,
     setMicrophoneDevice,
+    startPlayout,
   };
 }
