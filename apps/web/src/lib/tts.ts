@@ -89,14 +89,11 @@ export class TTSService {
         if (this.voices.length > 0) {
           // Cleanup listener(s)
           try {
-            (synth as any).removeEventListener?.(
-              "voiceschanged",
-              onVoicesChanged
-            );
+            synth.removeEventListener("voiceschanged", onVoicesChanged);
           } catch {}
           // Also clear property handler if set
           try {
-            (synth as any).onvoiceschanged = null;
+            synth.onvoiceschanged = null;
           } catch {}
           finalize("voiceschanged");
         }
@@ -111,10 +108,10 @@ export class TTSService {
 
       // Attach both property and event listener for maximum compatibility
       try {
-        (synth as any).addEventListener?.("voiceschanged", onVoicesChanged);
+        synth.addEventListener("voiceschanged", onVoicesChanged);
       } catch {}
       try {
-        (synth as any).onvoiceschanged = onVoicesChanged;
+        synth.onvoiceschanged = onVoicesChanged;
       } catch {}
 
       // Fallback timeout in case voiceschanged never fires (Safari quirks)
@@ -124,10 +121,7 @@ export class TTSService {
           setVoices();
           // Do not depend on event forever; resolve so callers can poll capabilities
           try {
-            (synth as any).removeEventListener?.(
-              "voiceschanged",
-              onVoicesChanged
-            );
+            synth.removeEventListener("voiceschanged", onVoicesChanged);
           } catch {}
           finalize("timeout");
         }
@@ -249,11 +243,12 @@ export class TTSService {
       // Cancel any ongoing/pending speech first; then give synth a moment to flush
       try {
         if (typeof window !== "undefined" && window.speechSynthesis) {
+          const synth = window.speechSynthesis;
           if (
-            window.speechSynthesis.speaking ||
-            (window.speechSynthesis as any).pending
+            synth.speaking ||
+            ("pending" in synth && (synth as { pending?: boolean }).pending)
           ) {
-            window.speechSynthesis.cancel();
+            synth.cancel();
           }
         }
       } catch {}
