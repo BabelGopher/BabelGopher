@@ -19,8 +19,14 @@ function ConferenceRoomContent() {
   const { roomName, name, lang } = router.query;
 
   const { showWarning } = useToasts();
-  const { isSubtitleEnabled, selectedLanguage, toggleSubtitle, setLanguage } =
-    useSettings();
+  const {
+    isSubtitleEnabled,
+    selectedLanguage,
+    toggleSubtitle,
+    setLanguage,
+    settings,
+    updateSettings,
+  } = useSettings();
 
   const {
     isSettingsOpen,
@@ -248,6 +254,10 @@ function ConferenceRoomContent() {
         onOpenSettings={handleOpenSettings}
         isMuted={isMuted}
         onToggleMute={handleToggleMute}
+        listeningMode={settings.listeningMode || "webrtc"}
+        onChangeListeningMode={(mode) =>
+          updateSettings({ listeningMode: mode })
+        }
       />
 
       {/* Translation Model Download Overlay */}

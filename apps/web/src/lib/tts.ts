@@ -266,7 +266,7 @@ export class TTSService {
       utterance.lang = voice.lang;
       utterance.rate = options.rate ?? 1.0;
       utterance.pitch = options.pitch ?? 1.0;
-      utterance.volume = options.volume ?? 0.75; // Default 75% volume to prevent echo
+      utterance.volume = options.volume ?? 0.65; // Default 65% volume to further reduce echo
 
       // Event handlers
       utterance.onstart = () => {

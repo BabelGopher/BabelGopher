@@ -29,4 +29,6 @@ export interface ConferenceSettings {
     microphone: string;
     speaker: string;
   };
+  // Listening mode for remote audio vs synthesized TTS
+  listeningMode?: "webrtc" | "tts_only";
 }

@@ -46,6 +46,7 @@ export function useLiveKit({
     useState<LocalTrackPublication | null>(null);
 
   const roomRef = useRef<Room | null>(null);
+  const remotePlayoutEnabledRef = useRef<boolean>(true);
 
   // Convert LiveKit participant to app participant format
   const convertParticipant = useCallback(
@@ -229,6 +230,15 @@ export function useLiveKit({
               kind: track.kind,
               trackSid: publication.trackSid,
             });
+            // Enforce remote playout preference: if disabled, immediately unsubscribe audio
+            try {
+              if (
+                publication.kind === "audio" &&
+                remotePlayoutEnabledRef.current === false
+              ) {
+                publication.setSubscribed(false);
+              }
+            } catch {}
             updateParticipants();
           }
         );
@@ -506,5 +516,20 @@ export function useLiveKit({
     toggleMute,
     setMicrophoneDevice,
     startPlayout,
+    // Toggle remote audio playout for all remote participants
+    setRemoteAudioPlayout: async (enabled: boolean) => {
+      remotePlayoutEnabledRef.current = enabled;
+      const currentRoom = roomRef.current;
+      if (!currentRoom) return;
+      try {
+        currentRoom.remoteParticipants.forEach((p) => {
+          p.audioTrackPublications.forEach((pub) => {
+            try {
+              pub.setSubscribed(enabled);
+            } catch {}
+          });
+        });
+      } catch {}
+    },
   };
 }

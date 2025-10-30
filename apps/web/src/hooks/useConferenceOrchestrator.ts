@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef, useMemo } from "react";
+import { RoomEvent } from "livekit-client";
 import { useLiveKit } from "./useLiveKit";
 import { createComponentLogger } from "../lib/logger";
 const log = createComponentLogger("Orchestrator");
@@ -84,10 +85,11 @@ export function useConferenceOrchestrator({
     setParticipants,
   } = useConferenceState();
 
-  const { isTtsEnabled, toggleTts } = useSettings();
+  const { isTtsEnabled, toggleTts, settings } = useSettings();
 
   // LiveKit WebRTC
   const {
+    room,
     participants: liveKitParticipants,
     isConnecting,
     isConnected,
@@ -97,6 +99,7 @@ export function useConferenceOrchestrator({
     toggleMute: toggleLiveKitMute,
     setMicrophoneDevice,
     startPlayout,
+    setRemoteAudioPlayout,
   } = useLiveKit({
     roomName,
     participantName,
@@ -126,7 +129,29 @@ export function useConferenceOrchestrator({
   } = useTranslation();
 
   // Text-to-Speech
-  const { isTTSAvailable, speak } = useTTS();
+  const { isTTSAvailable, speak, isSpeaking: isTtsSpeaking } = useTTS();
+
+  // Gate STT processing while TTS is speaking and for a short tail period
+  const lastTtsEndAtRef = useRef(0);
+  const TTS_TAIL_MS = 800;
+
+  // Track TTS end time to apply tail suppression
+  useEffect(() => {
+    if (!isTtsSpeaking) {
+      lastTtsEndAtRef.current = Date.now();
+    }
+  }, [isTtsSpeaking]);
+
+  // Apply listening mode to remote audio playout
+  useEffect(() => {
+    try {
+      if (settings?.listeningMode === "tts_only") {
+        setRemoteAudioPlayout(false);
+      } else {
+        setRemoteAudioPlayout(true);
+      }
+    } catch {}
+  }, [settings?.listeningMode, setRemoteAudioPlayout]);
 
   // Track local participant ID for transcription
   const localParticipantIdRef = useRef<string | null>(null);
@@ -247,6 +272,11 @@ export function useConferenceOrchestrator({
   // Process new transcriptions: Translate and speak
   useEffect(() => {
     if (transcriptions.length === 0) return;
+
+    // Gate processing during/after TTS to avoid feedback loops
+    if (isTtsSpeaking || Date.now() - lastTtsEndAtRef.current < TTS_TAIL_MS) {
+      return;
+    }
 
     const latestTranscription = transcriptions[transcriptions.length - 1];
 
@@ -396,6 +426,26 @@ export function useConferenceOrchestrator({
           setSubtitles(combined.slice(-200));
         }
 
+        // Broadcast original text for remote listeners via data channel
+        try {
+          if (room && room.localParticipant) {
+            const payload = {
+              type: "bg/transcription-final",
+              text,
+              sourceLang,
+              segmentId: latestTranscription.segmentId || null,
+              speakerId: participantId,
+              speakerName: speaker,
+              timestamp: latestTranscription.timestamp,
+            };
+            const data = new TextEncoder().encode(JSON.stringify(payload));
+            // Reliable delivery for final messages (no topic)
+            room.localParticipant.publishData(data, { reliable: true });
+          }
+        } catch {
+          log.warn("Failed to publish transcription data");
+        }
+
         // Speak translated text (TTS)
         if (isTtsEnabled && translatedText) {
           // Check TTS capability before attempting
@@ -429,11 +479,18 @@ export function useConferenceOrchestrator({
     addSubtitle,
     setSubtitles,
     subtitles,
+    isTtsSpeaking,
+    room,
   ]);
 
   // Handle partial updates: create/update a subtitle entry with typing indicator
   useEffect(() => {
     if (partials.length === 0) return;
+
+    // Gate partials during/after TTS to avoid echo artifacts showing up as typing
+    if (isTtsSpeaking || Date.now() - lastTtsEndAtRef.current < TTS_TAIL_MS) {
+      return;
+    }
 
     const latest = partials[partials.length - 1];
     const subId = `seg-${latest.segmentId}`;
@@ -466,7 +523,103 @@ export function useConferenceOrchestrator({
       ].slice(-200);
     }
     setSubtitles(updated);
-  }, [partials, setSubtitles]);
+  }, [partials, setSubtitles, isTtsSpeaking]);
+
+  // Receive remote transcription data via LiveKit
+  useEffect(() => {
+    if (!room) return;
+
+    const onData = async (payload: Uint8Array) => {
+      try {
+        const json = new TextDecoder().decode(payload);
+        const msg = JSON.parse(json) as {
+          type: string;
+          text: string;
+          sourceLang?: string;
+          segmentId?: string | null;
+          speakerId?: string;
+          speakerName?: string;
+          timestamp?: number;
+        };
+        if (msg?.type !== "bg/transcription-final" || !msg.text) return;
+
+        const speaker = msg.speakerName || "Speaker";
+        const subId = msg.segmentId
+          ? `remote-${msg.speakerId || "unk"}-${msg.segmentId}`
+          : `remote-${Date.now()}-${Math.random()}`;
+
+        // Translate for local user's target
+        let translatedText = msg.text;
+        try {
+          if (isTranslationAvailable) {
+            const translated = await translateText(msg.text, {
+              sourceLang: (msg.sourceLang || "auto") as string,
+              targetLang: targetLanguage,
+              participantId: msg.speakerId || "remote",
+              participantName: speaker,
+            });
+            if (translated) translatedText = translated;
+          }
+        } catch {}
+
+        // Append subtitle
+        const current = subtitlesRef.current;
+        const idx = current.findIndex((s) => s.id === subId);
+        if (idx >= 0) {
+          const next = [...current];
+          next[idx] = {
+            ...next[idx],
+            originalText: msg.text,
+            translatedText,
+            originalTextPartial: undefined,
+            translatedTextPartial: undefined,
+            languageCode: targetLanguage,
+            isProcessing: false,
+            timestamp: Date.now(),
+          };
+          setSubtitles(next);
+        } else {
+          const subtitle: Subtitle = {
+            id: subId,
+            speakerName: speaker,
+            originalText: msg.text,
+            translatedText,
+            timestamp: Date.now(),
+            languageCode: targetLanguage,
+            isProcessing: false,
+          };
+          setSubtitles([...current, subtitle].slice(-200));
+        }
+
+        // In TTS-only listening mode, speak the translated text
+        if (settings?.listeningMode === "tts_only") {
+          try {
+            if (isTTSAvailable && translatedText) {
+              speak(translatedText, targetLanguage);
+            }
+          } catch {}
+        }
+      } catch {
+        log.warn("Failed to handle data message");
+      }
+    };
+
+    room.on(RoomEvent.DataReceived, onData);
+    return () => {
+      try {
+        room.off(RoomEvent.DataReceived, onData);
+      } catch {}
+    };
+  }, [
+    room,
+    translateText,
+    isTranslationAvailable,
+    setSubtitles,
+    targetLanguage,
+    isTTSAvailable,
+    speak,
+    settings?.listeningMode,
+  ]);
 
   // Toggle mute wrapper
   const toggleMute = useCallback(() => {
