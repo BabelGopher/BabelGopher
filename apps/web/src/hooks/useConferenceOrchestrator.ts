@@ -133,7 +133,52 @@ export function useConferenceOrchestrator({
 
   // Gate STT processing while TTS is speaking and for a short tail period
   const lastTtsEndAtRef = useRef(0);
-  const TTS_TAIL_MS = 800;
+  const TTS_TAIL_MS = 2200;
+
+  // Maintain small buffer of recent TTS utterances to filter echo-recognition
+  const lastTtsHistoryRef = useRef<{ norm: string; at: number }[]>([]);
+  const normalizeText = useCallback((t: string) => {
+    try {
+      return t
+        .toLowerCase()
+        .replace(/[\p{P}\p{S}]+/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    } catch {
+      return (t || "").toLowerCase().trim();
+    }
+  }, []);
+  const noteTtsUtterance = useCallback(
+    (t: string) => {
+      const norm = normalizeText(t);
+      const now = Date.now();
+      const pruned = lastTtsHistoryRef.current.filter(
+        (x) => now - x.at < 10000
+      );
+      pruned.push({ norm, at: now });
+      lastTtsHistoryRef.current = pruned.slice(-5);
+    },
+    [normalizeText]
+  );
+  const isLikelyTtsEcho = useCallback(
+    (recognized: string) => {
+      const norm = normalizeText(recognized);
+      if (!norm) return false;
+      const now = Date.now();
+      for (const item of lastTtsHistoryRef.current) {
+        if (now - item.at > 10000) continue;
+        const a = norm;
+        const b = item.norm;
+        if (a === b) return true;
+        // containment & length ratio heuristic
+        const lenRatio =
+          Math.min(a.length, b.length) / Math.max(a.length, b.length);
+        if ((a.includes(b) || b.includes(a)) && lenRatio >= 0.7) return true;
+      }
+      return false;
+    },
+    [normalizeText]
+  );
 
   // Track TTS end time to apply tail suppression
   useEffect(() => {
@@ -304,6 +349,19 @@ export function useConferenceOrchestrator({
 
         log.debug("Processing transcription", { speaker, text });
 
+        // Drop if this looks like our own synthesized speech
+        if (isLikelyTtsEcho(text)) {
+          const subIdEcho = latestTranscription.segmentId
+            ? `seg-${latestTranscription.segmentId}`
+            : undefined;
+          if (subIdEcho) {
+            const current = subtitlesRef.current;
+            const filtered = current.filter((s) => s.id !== subIdEcho);
+            setSubtitles(filtered);
+          }
+          return;
+        }
+
         // Very short segments are likely artifacts; drop them and cleanup any pending placeholder
         const subIdShort = latestTranscription.segmentId
           ? `seg-${latestTranscription.segmentId}`
@@ -454,6 +512,7 @@ export function useConferenceOrchestrator({
           } else {
             try {
               log.info("Speaking translated text", { text: translatedText });
+              noteTtsUtterance(translatedText);
               speak(translatedText, targetLanguage);
             } catch (ttsError) {
               log.error("TTS error", ttsError as Error);
@@ -481,6 +540,8 @@ export function useConferenceOrchestrator({
     subtitles,
     isTtsSpeaking,
     room,
+    isLikelyTtsEcho,
+    noteTtsUtterance,
   ]);
 
   // Handle partial updates: create/update a subtitle entry with typing indicator
@@ -493,6 +554,9 @@ export function useConferenceOrchestrator({
     }
 
     const latest = partials[partials.length - 1];
+    if (isLikelyTtsEcho(latest.text)) {
+      return;
+    }
     const subId = `seg-${latest.segmentId}`;
 
     const prev = subtitlesRef.current;
@@ -523,7 +587,7 @@ export function useConferenceOrchestrator({
       ].slice(-200);
     }
     setSubtitles(updated);
-  }, [partials, setSubtitles, isTtsSpeaking]);
+  }, [partials, setSubtitles, isTtsSpeaking, isLikelyTtsEcho]);
 
   // Receive remote transcription data via LiveKit
   useEffect(() => {
@@ -595,6 +659,7 @@ export function useConferenceOrchestrator({
         if (settings?.listeningMode === "tts_only") {
           try {
             if (isTTSAvailable && translatedText) {
+              noteTtsUtterance(translatedText);
               speak(translatedText, targetLanguage);
             }
           } catch {}
@@ -619,6 +684,7 @@ export function useConferenceOrchestrator({
     isTTSAvailable,
     speak,
     settings?.listeningMode,
+    noteTtsUtterance,
   ]);
 
   // Toggle mute wrapper
