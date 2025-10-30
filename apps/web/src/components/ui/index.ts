@@ -19,3 +19,5 @@ export type { SpinnerProps } from './Spinner';
 
 export { AudioMeter } from './AudioMeter';
 export type { AudioMeterProps } from './AudioMeter';
+
+export { ErrorBoundary } from './ErrorBoundary';

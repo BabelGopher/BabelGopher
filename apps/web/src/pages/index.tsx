@@ -7,6 +7,7 @@ import { SpeechBubble } from '../components/landing/SpeechBubble';
 import { MicrophoneSettingsModal } from '../components/audio/MicrophoneSettingsModal';
 import { SpeakerSettingsModal } from '../components/audio/SpeakerSettingsModal';
 import { BrowserWarning } from '../components/BrowserWarning';
+import { Input, Button } from '../components/ui';
 import {
   getLanguage,
   saveLanguage,
@@ -33,6 +34,7 @@ export default function LobbyPage() {
   const [roomCode, setRoomCode] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({ name: '', roomCode: '', language: '' });
 
   // Audio settings state - initialized from localStorage
   const [showMicSettings, setShowMicSettings] = useState(false);
@@ -71,9 +73,35 @@ export default function LobbyPage() {
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    const newErrors = { name: '', roomCode: '', language: '' };
+    let hasErrors = false;
+
+    if (!name.trim()) {
+      newErrors.name = 'Name is required';
+      hasErrors = true;
+    }
+
+    if (!roomCode.trim()) {
+      newErrors.roomCode = 'Room code is required';
+      hasErrors = true;
+    }
+
+    if (!selectedLanguage) {
+      newErrors.language = 'Please select a language';
+      hasErrors = true;
+    }
+
+    setErrors(newErrors);
+
+    if (hasErrors) {
+      return;
+    }
+
     setLoading(true);
     setTimeout(() => {
-      router.push(`/room/${roomCode || 'demo'}?name=${encodeURIComponent(name || 'Guest')}&lang=${selectedLanguage}`);
+      router.push(`/room/${roomCode}?name=${encodeURIComponent(name)}&lang=${selectedLanguage}`);
     }, 1000);
   };
 
@@ -92,7 +120,7 @@ export default function LobbyPage() {
       {/* Floating Geometric Shapes */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-5">
         <Triangle className="absolute top-[10%] right-[15%] w-4 h-4 md:w-6 md:h-6 text-blue-500 animate-float-slow hidden md:block" />
-        <Circle className="absolute top-[5%] left-[5%] w-8 h-8 md:w-12 md:h-12 text-purple-400 opacity-60 hidden lg:block" style={{background: 'conic-gradient(from 0deg, #ff0080, #00ffff, #ff0080)'}} />
+        <Circle className="absolute top-[5%] left-[5%] w-8 h-8 md:w-12 md:h-12 text-purple-400 opacity-60 hidden lg:block" />
         <Square className="absolute top-[35%] left-[8%] w-6 h-6 md:w-8 md:h-8 text-yellow-400 rotate-45 animate-float-reverse hidden md:block" />
         <Triangle className="absolute top-[40%] left-[12%] w-6 h-6 md:w-8 md:h-8 text-blue-400 rotate-180 animate-float-fast hidden lg:block" />
         <div className="absolute top-[45%] right-[10%] w-2 h-2 md:w-3 md:h-3 rounded-full bg-pink-400 hidden md:block" />
@@ -113,7 +141,7 @@ export default function LobbyPage() {
         {/* Mobile Background Gopher - Hero element */}
         <div className="md:hidden absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none">
           <img
-            src="/images/transparant-gopher.png"
+            src="/images/babel-gopher-hero.png"
             alt=""
             className="w-full max-w-lg opacity-55"
             style={{ transform: 'translateY(-25%)' }}
@@ -231,64 +259,81 @@ export default function LobbyPage() {
             <form onSubmit={handleJoin} className="space-y-4 md:space-y-5">
 
               {/* Your Name Input */}
-              <input
+              <Input
+                id="name"
+                label="Your Name"
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your Name"
-                aria-label="Enter your name"
-                className="w-full px-4 py-3 md:px-5 md:py-4 rounded-xl bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-300 text-base md:text-lg"
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (errors.name) setErrors({ ...errors, name: '' });
+                }}
+                placeholder="John Doe"
+                error={errors.name}
                 required
               />
 
               {/* Room Code Input */}
-              <input
+              <Input
+                id="roomCode"
+                label="Room Code"
                 type="text"
                 value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value)}
-                placeholder="Room Code"
-                aria-label="Enter room code"
-                className="w-full px-4 py-3 md:px-5 md:py-4 rounded-xl bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-300 text-base md:text-lg"
+                onChange={(e) => {
+                  setRoomCode(e.target.value);
+                  if (errors.roomCode) setErrors({ ...errors, roomCode: '' });
+                }}
+                placeholder="abc123"
+                error={errors.roomCode}
                 required
               />
 
               {/* Language Selector with Flags */}
-              <div className="relative">
-                <select
-                  value={selectedLanguage}
-                  onChange={(e) => setSelectedLanguage(e.target.value)}
-                  aria-label="Select output language"
-                  className="w-full px-4 py-3 md:px-5 md:py-4 rounded-xl bg-white text-gray-700 appearance-none focus:outline-none focus:ring-4 focus:ring-blue-300 cursor-pointer text-base md:text-lg pr-12"
-                >
-                  <option value="">I want to hear in:</option>
-                  {LANGUAGE_FLAGS.map((lang) => (
-                    <option key={lang.code} value={lang.code}>
-                      {lang.name}
-                    </option>
-                  ))}
-                </select>
-                {/* Flag Icons Display */}
-                <div className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 flex gap-1 pointer-events-none">
-                  {LANGUAGE_FLAGS.map((lang) => {
-                    const FlagComponent = lang.flag;
-                    return (
-                      <FlagComponent key={lang.code} className="w-4 h-3 md:w-5 md:h-4 rounded-sm" />
-                    );
-                  })}
+              <div>
+                <label htmlFor="language" className="block text-sm font-medium text-gray-900 md:text-white mb-1.5">
+                  Output Language
+                </label>
+                <div className="relative">
+                  <select
+                    id="language"
+                    value={selectedLanguage}
+                    onChange={(e) => {
+                      setSelectedLanguage(e.target.value);
+                      if (errors.language) setErrors({ ...errors, language: '' });
+                    }}
+                    className="w-full px-4 py-3 md:px-5 md:py-4 rounded-xl bg-white text-gray-700 appearance-none focus:outline-none focus:ring-4 focus:ring-blue-300 cursor-pointer text-base md:text-lg pr-12"
+                  >
+                    <option value="">I want to hear in:</option>
+                    {LANGUAGE_FLAGS.map((lang) => (
+                      <option key={lang.code} value={lang.code}>
+                        {lang.name}
+                      </option>
+                    ))}
+                  </select>
+                  {/* Flag Icons Display */}
+                  <div className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 flex gap-1 pointer-events-none">
+                    {LANGUAGE_FLAGS.map((lang) => {
+                      const FlagComponent = lang.flag;
+                      return (
+                        <FlagComponent key={lang.code} className="w-4 h-3 md:w-5 md:h-4 rounded-sm" />
+                      );
+                    })}
+                  </div>
                 </div>
+                {errors.language && (
+                  <p className="mt-1 text-sm text-red-600 md:text-red-200">{errors.language}</p>
+                )}
               </div>
 
               {/* Join Conference Button */}
-              <button
+              <Button
                 type="submit"
+                variant="primary"
                 disabled={loading}
-                aria-label="Join conference with selected settings"
-                className={`w-full bg-gradient-to-r from-pink-500 to-pink-600 text-white font-bold py-3 md:py-4 rounded-full text-lg md:text-xl shadow-lg transition-all ${
-                  loading ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-xl hover:scale-105'
-                }`}
+                className="w-full bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 py-3 md:py-4 rounded-full text-lg md:text-xl shadow-lg hover:shadow-xl transition-all"
               >
                 {loading ? 'Connecting...' : 'Join Conference'}
-              </button>
+              </Button>
             </form>
           </div>
 

@@ -3,6 +3,12 @@
  * Chrome is recommended for optimal Web Audio API and MediaDevices API support
  */
 
+declare global {
+  interface Window {
+    chrome?: Record<string, unknown>;
+  }
+}
+
 export const isChromeOrChromium = (): boolean => {
   if (typeof window === 'undefined') return true; // SSR - assume true
 

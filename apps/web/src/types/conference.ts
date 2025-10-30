@@ -13,8 +13,12 @@ export interface Subtitle {
   speakerName: string;
   originalText: string;
   translatedText: string;
+  // Live partials while a segment is being spoken/translated
+  originalTextPartial?: string;
+  translatedTextPartial?: string;
   timestamp: number;
   isProcessing?: boolean; // For "..." indicator
+  languageCode?: string; // Language code for translated text (e.g., 'ko', 'ja', 'es')
 }
 
 export interface ConferenceSettings {

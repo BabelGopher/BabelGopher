@@ -29,8 +29,8 @@ export type SupportedLanguageCode = typeof SUPPORTED_LANGUAGE_CODES[number];
  * @param code The code to validate.
  * @returns True if the code is a valid language code.
  */
-export function isValidLanguageCode(code: any): code is SupportedLanguageCode {
-  return SUPPORTED_LANGUAGE_CODES.includes(code);
+export function isValidLanguageCode(code: unknown): code is SupportedLanguageCode {
+  return typeof code === 'string' && SUPPORTED_LANGUAGE_CODES.includes(code as SupportedLanguageCode);
 }
 
 interface LanguageSelectorProps {

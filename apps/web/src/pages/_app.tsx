@@ -1,6 +1,8 @@
 import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
 import { Luckiest_Guy, Paytone_One, Nunito } from 'next/font/google';
+import { ErrorBoundary } from '@/components/ui';
+import { AppProvider } from '@/context/AppContext';
 
 // Define fonts for BabelGopher kitsch theme
 const luckiestGuy = Luckiest_Guy({
@@ -26,8 +28,12 @@ const nunito = Nunito({
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <div className={`${luckiestGuy.variable} ${paytoneOne.variable} ${nunito.variable}`}>
-      <Component {...pageProps} />
-    </div>
+    <ErrorBoundary>
+      <AppProvider>
+        <div className={`${luckiestGuy.variable} ${paytoneOne.variable} ${nunito.variable}`}>
+          <Component {...pageProps} />
+        </div>
+      </AppProvider>
+    </ErrorBoundary>
   );
 }
