@@ -1,49 +1,92 @@
 /**
- * Chrome Built-in AI Translation Service
- * Provides access to Chrome's Translator API or fallback to Prompt API for translation
+ * Chrome Built-in AI Translation Service (WICG Translator API)
+ * Uses global self.Translator (and optional self.LanguageDetector) when available.
  */
 
-// Type definitions for Chrome Translation API (experimental)
+// New WICG API globals
 declare global {
-  interface Window {
-    translation?: {
-      canTranslate?(options: { sourceLanguage: string; targetLanguage: string }): Promise<string>;
-      createTranslator?(options: {
-        sourceLanguage: string;
-        targetLanguage: string;
-      }): Promise<Translator>;
-    };
-  }
+  // Minimal shape of the Translator API for our usage
+  var Translator:
+    | {
+        availability: (opts: {
+          sourceLanguage: string;
+          targetLanguage: string;
+        }) => Promise<
+          | "readily"
+          | "after-download"
+          | "downloadable"
+          | "unavailable"
+          | "available"
+          | string
+        >;
+        create: (opts: {
+          sourceLanguage: string;
+          targetLanguage: string;
+          // Optional progress monitor
+          monitor?: (m: {
+            addEventListener: (
+              type: "downloadprogress",
+              cb: (e: { loaded: number }) => void
+            ) => void;
+          }) => void;
+        }) => Promise<{
+          translate: (text: string) => Promise<string>;
+          destroy?: () => void;
+        }>;
+      }
+    | undefined;
+
+  // Minimal shape of the LanguageDetector API for auto-detection
+  var LanguageDetector:
+    | {
+        availability?: () => Promise<
+          "readily" | "after-download" | "downloadable" | string
+        >;
+        create: (opts?: {
+          monitor?: (m: {
+            addEventListener: (
+              type: "downloadprogress",
+              cb: (e: { loaded: number }) => void
+            ) => void;
+          }) => void;
+        }) => Promise<{
+          detect: (
+            text: string
+          ) => Promise<Array<{ detectedLanguage: string; confidence: number }>>;
+        }>;
+      }
+    | undefined;
 }
 
-interface Translator {
+export interface Translator {
   translate(text: string): Promise<string>;
   destroy?(): void;
 }
 
 export interface TranslationCapabilities {
   isAvailable: boolean;
-  method: 'translator-api' | 'prompt-api' | 'none';
+  method: "translator-api" | "none";
   error?: string;
 }
 
 export interface TranslationOptions {
   sourceLang: string; // 'auto' for auto-detect or explicit code (e.g., 'en', 'ko')
   targetLang: string; // Target language code (e.g., 'en', 'ko', 'ja')
+  onProgress?: (progress: number) => void; // optional: 0-100
 }
 
 // Supported languages for the translation feature
 export const SUPPORTED_LANGUAGES = {
-  en: 'English',
-  ko: '한국어 (Korean)',
-  ja: '日本語 (Japanese)',
-  zh: '中文 (Chinese)',
-  es: 'Español (Spanish)',
-  fr: 'Français (French)',
-  de: 'Deutsch (German)',
-  it: 'Italiano (Italian)',
-  pt: 'Português (Portuguese)',
-  ru: 'Русский (Russian)',
+  en: "English",
+  ko: "한국어 (Korean)",
+  ja: "日本語 (Japanese)",
+  zh: "中文 (Chinese)",
+  es: "Español (Spanish)",
+  fr: "Français (French)",
+  de: "Deutsch (German)",
+  it: "Italiano (Italian)",
+  pt: "Português (Portuguese)",
+  ru: "Русский (Russian)",
 } as const;
 
 export type SupportedLanguageCode = keyof typeof SUPPORTED_LANGUAGES;
@@ -51,38 +94,40 @@ export type SupportedLanguageCode = keyof typeof SUPPORTED_LANGUAGES;
 /**
  * Check if Chrome Translation API or Prompt API is available
  */
+import { createComponentLogger } from "./logger";
+const log = createComponentLogger("Translation");
+
 export async function checkTranslationCapabilities(): Promise<TranslationCapabilities> {
   try {
-    // Check for dedicated Translator API first
-    if (window.translation && window.translation.createTranslator) {
-      return {
-        isAvailable: true,
-        method: 'translator-api',
-      };
-    }
-
-    // Fallback to Prompt API (used for translation via prompts)
-    if (window.ai && window.ai.languageModel) {
-      const capabilities = await window.ai.languageModel.capabilities();
-      if (capabilities.available === 'readily' || capabilities.available === 'after-download') {
-        return {
-          isAvailable: true,
-          method: 'prompt-api',
-        };
+    const hasTranslator =
+      typeof self !== "undefined" && "Translator" in self && !!self.Translator;
+    if (hasTranslator) {
+      // Probe a common pair; if downloadable/after-download, still treat as available
+      try {
+        const status = await self.Translator!.availability({
+          sourceLanguage: "en",
+          targetLanguage: "ko",
+        });
+        log.info("Translator availability", { status });
+      } catch {
+        // Ignore probe errors; API exists anyway
+        log.warn("Translator availability probe failed");
       }
+      return { isAvailable: true, method: "translator-api" };
     }
 
+    log.warn("No Translator API available");
     return {
       isAvailable: false,
-      method: 'none',
-      error: 'Neither Translator API nor Prompt API available. Please use Chrome Canary with AI features enabled.',
+      method: "none",
+      error: "Translator API not available",
     };
   } catch (error) {
-    console.error('Error checking translation capabilities:', error);
+    log.error("Error checking capabilities", error as Error);
     return {
       isAvailable: false,
-      method: 'none',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      method: "none",
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 }
@@ -94,74 +139,51 @@ export async function createTranslator(
   options: TranslationOptions
 ): Promise<Translator | null> {
   try {
-    const capabilities = await checkTranslationCapabilities();
-
-    if (!capabilities.isAvailable) {
-      console.warn('Translation not available:', capabilities.error);
+    const caps = await checkTranslationCapabilities();
+    if (!caps.isAvailable) {
+      log.warn("Translation not available", { error: caps.error });
       return null;
     }
 
-    // Use dedicated Translator API if available
-    if (capabilities.method === 'translator-api' && window.translation?.createTranslator) {
-      console.log('[Translation] Using Chrome Translator API');
-      const translator = await window.translation.createTranslator({
-        sourceLanguage: options.sourceLang === 'auto' ? 'en' : options.sourceLang,
+    if (typeof self !== "undefined" && self.Translator) {
+      const source = options.sourceLang === "auto" ? "en" : options.sourceLang; // caller should detect when possible
+      const status = await self.Translator.availability({
+        sourceLanguage: source,
         targetLanguage: options.targetLang,
       });
-      return translator;
-    }
+      if (status === "unavailable") {
+        log.warn("Language pair unavailable", {
+          source,
+          target: options.targetLang,
+        });
+        return null;
+      }
 
-    // Fallback: Use Prompt API for translation
-    if (capabilities.method === 'prompt-api' && window.ai?.languageModel) {
-      console.log('[Translation] Using Prompt API for translation');
-
-      const systemPrompt = `You are a professional translator. Translate the given text from ${
-        options.sourceLang === 'auto' ? 'the detected language' : options.sourceLang
-      } to ${options.targetLang}.
-
-IMPORTANT RULES:
-1. Return ONLY the translated text, no explanations or additional context
-2. Preserve the tone and meaning of the original text
-3. If the input is already in the target language, return it unchanged
-4. For proper nouns and names, keep them in their original form
-5. Be concise and accurate`;
-
-      const model = await window.ai.languageModel.create({
-        systemPrompt,
-        temperature: 0.3, // Lower temperature for more consistent translations
-        topK: 3,
+      const native = await self.Translator.create({
+        sourceLanguage: source,
+        targetLanguage: options.targetLang,
+        monitor(m) {
+          m.addEventListener("downloadprogress", (e) => {
+            const pct = Math.round(e.loaded * 100);
+            log.info("Translator model download progress", { progress: pct });
+            if (options.onProgress) {
+              try {
+                options.onProgress(pct);
+              } catch {}
+            }
+          });
+        },
       });
 
-      // Create a wrapper that implements the Translator interface
       return {
-        translate: async (text: string): Promise<string> => {
-          if (!text || text.trim().length === 0) {
-            return '';
-          }
-
-          try {
-            const prompt = `Translate this text to ${
-              SUPPORTED_LANGUAGES[options.targetLang as SupportedLanguageCode] || options.targetLang
-            }:\n\n${text}`;
-
-            const translation = await model.prompt(prompt);
-            return translation.trim();
-          } catch (error) {
-            console.error('[Translation] Translation failed:', error);
-            throw new Error('Translation failed');
-          }
-        },
-        destroy: () => {
-          if (model && typeof model.destroy === 'function') {
-            model.destroy();
-          }
-        },
+        translate: (text: string) => native.translate(text),
+        destroy: native.destroy ? () => native.destroy!() : undefined,
       };
     }
 
     return null;
   } catch (error) {
-    console.error('Failed to initialize translator:', error);
+    log.error("Failed to initialize translator", error as Error);
     return null;
   }
 }
@@ -174,23 +196,15 @@ export async function translateText(
   options: TranslationOptions
 ): Promise<string> {
   const translator = await createTranslator(options);
-
-  if (!translator) {
-    throw new Error('Failed to initialize translator');
-  }
-
+  if (!translator) throw new Error("Failed to initialize translator");
   try {
-    const startTime = performance.now();
+    const start = performance.now();
     const translated = await translator.translate(text);
-    const latency = performance.now() - startTime;
-
-    console.log(`[Translation] Latency: ${latency.toFixed(0)}ms, Input: "${text.substring(0, 50)}...", Output: "${translated.substring(0, 50)}..."`);
-
+    const latency = Math.round(performance.now() - start);
+    log.info("Translation latency", { ms: latency });
     return translated;
   } finally {
-    if (translator.destroy) {
-      translator.destroy();
-    }
+    translator.destroy?.();
   }
 }
 
@@ -198,7 +212,9 @@ export async function translateText(
  * Get language name from code
  */
 export function getLanguageName(code: string): string {
-  return SUPPORTED_LANGUAGES[code as SupportedLanguageCode] || code.toUpperCase();
+  return (
+    SUPPORTED_LANGUAGES[code as SupportedLanguageCode] || code.toUpperCase()
+  );
 }
 
 /**

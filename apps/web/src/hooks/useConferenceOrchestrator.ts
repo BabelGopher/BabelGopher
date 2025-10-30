@@ -367,10 +367,9 @@ export function useConferenceOrchestrator({
             (s) =>
               !(
                 s.isProcessing &&
-                (
-                  (!s.originalTextPartial || s.originalTextPartial.trim().length === 0) ||
-                  (s.speakerName === speaker && s.id !== subId)
-                )
+                (!s.originalTextPartial ||
+                  s.originalTextPartial.trim().length === 0 ||
+                  (s.speakerName === speaker && s.id !== subId))
               )
           );
           setSubtitles(cleaned);
@@ -389,10 +388,9 @@ export function useConferenceOrchestrator({
             (s) =>
               !(
                 s.isProcessing &&
-                (
-                  (!s.originalTextPartial || s.originalTextPartial.trim().length === 0) ||
-                  (s.speakerName === speaker && s.id !== subId)
-                )
+                (!s.originalTextPartial ||
+                  s.originalTextPartial.trim().length === 0 ||
+                  (s.speakerName === speaker && s.id !== subId))
               )
           );
           setSubtitles(combined.slice(-200));

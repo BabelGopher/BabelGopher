@@ -1,117 +1,243 @@
 # BabelGopher 🌐
 
-> Real-time multilingual translation for audio conversations using 100% client-side AI
+> Real-time multilingual interpretation for audio conversations using 100% on-device AI
 
 **Chrome Built-in AI Challenge 2025**
 
 ## Overview
 
-BabelGopher breaks down language barriers in video conferencing and live streaming by leveraging Chrome Built-in AI APIs to perform real-time speech-to-text, translation, and text-to-speech entirely in the browser.
+BabelGopher breaks down language barriers in real-time video conferencing by combining:
+- **LiveKit WebRTC** for peer-to-peer audio communication
+- **Web Speech API** for speech-to-text transcription
+- **Chrome Translation API** for on-device translation
+- **Web Speech Synthesis** for natural voice output
 
-## Key Features
+All AI processing happens **on-device** in your browser - no cloud APIs, no external servers for AI.
 
-- 🎤 Real-time Speech-to-Text (Chrome Prompt API)
-- 🌍 Multilingual Translation (Chrome Translator API)
-- 🔊 Natural Voice Output (Web Speech API)
-- 💬 Live Subtitles (Original + Translated)
-- 🎛️ User Controls (Language selection, toggles)
-- 👥 Multi-Participant Support
+## ✨ Key Features
 
-## Tech Stack
+- 🎤 **Real-time Speech-to-Text** - Continuous transcription using Web Speech API
+- 🌍 **Instant Translation** - 10+ languages with Chrome's built-in AI
+- 🔊 **Natural Voice Output** - Text-to-speech in your preferred language
+- 💬 **Live Subtitles** - Side-by-side original + translated text
+- 🎛️ **User Controls** - Language selection, TTS toggle, subtitle toggle
+- 👥 **Multi-Participant** - Support for multiple participants via LiveKit
+- 🔒 **Privacy-First** - All AI processing on-device, no cloud uploads
+- ⚡ **Low Latency** - Typical pipeline: <500ms from speech to translated audio
+
+## 🛠️ Tech Stack
+
+### Core Technologies
+- **LiveKit** - WebRTC for real-time audio communication
+- **Web Speech API** - Browser-native speech recognition (STT)
+- **Chrome Translation API** - On-device translation (with Prompt API fallback)
+- **Web Speech Synthesis** - Browser-native text-to-speech (TTS)
 
 ### Frontend
-- Next.js 14 (React + TypeScript)
-- Tailwind CSS
-- LiveKit Client SDK
+- **Next.js 15** - React framework with App Router
+- **React 19** - UI library
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **LiveKit Client SDK** - WebRTC client
 
-### Backend
-- Go 1.22
-- LiveKit Server SDK
-- Google Cloud Run
+### Backend (Minimal)
+- **Next.js API Routes** - JWT token generation for LiveKit
+- **livekit-server-sdk** - Server-side token signing
 
-## Getting Started
+### State Management
+- **React Context API** - Global state
+- **Custom hooks** - Modular logic (useSTT, useTranslation, useTTS, etc.)
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- **Chrome Canary with Built-in AI flags enabled** (required for STT features)
-- pnpm 9.x
-- Go 1.22+
-- Docker (for deployment)
+- **Chrome Canary** or **Edge Dev** (required for Chrome Built-in AI)
+- **Node.js 18+** and **pnpm 9.x**
+- **LiveKit Account** - Get free tier at [cloud.livekit.io](https://cloud.livekit.io/)
 
-### Chrome AI Setup
+### 1. Chrome AI Setup
 
-To use BabelGopher's AI-powered real-time transcription, you need Chrome Canary with built-in AI enabled:
+BabelGopher requires Chrome Canary with experimental AI features enabled.
 
-1. **Install Chrome Canary**: https://www.google.com/chrome/canary/
+**Quick Setup:**
+1. Install [Chrome Canary](https://www.google.com/chrome/canary/)
+2. Open `chrome://flags`
+3. Enable these flags:
+   - `#translation-api` → **Enabled**
+   - `#prompt-api-for-gemini-nano` → **Enabled**
+   - `#optimization-guide-on-device-model` → **Enabled BypassPerfRequirement**
+4. Restart browser
+5. Verify: Open DevTools console, type `'ai' in window && 'translation' in window` → should return `true`
 
-2. **Enable AI features**:
-   - Navigate to: `chrome://flags/#optimization-guide-on-device-model`
-   - Set to: **"Enabled BypassPerfRequirement"**
+**Detailed setup guide:** See [docs/CHROME_AI_SETUP.md](docs/CHROME_AI_SETUP.md)
 
-   - Navigate to: `chrome://flags/#prompt-api-for-gemini-nano`
-   - Set to: **"Enabled"**
+### 2. Install Dependencies
 
-3. **Restart Chrome Canary**
-
-4. **Verify installation**:
-   - Open DevTools Console
-   - Type: `window.ai?.languageModel`
-   - Should return an object (not undefined)
-
-5. **First run**: Model download may occur automatically (check `chrome://components/`)
-
-For detailed information: https://developer.chrome.com/docs/ai/built-in
-
-### Development
-
-**1. Configure Environment Variables:**
-
-Backend:
 ```bash
-cd apps/server
-cp .env.example .env
-# Edit .env with your LiveKit credentials from https://cloud.livekit.io/
+# Install pnpm if you don't have it
+npm install -g pnpm
+
+# Install dependencies (from project root)
+pnpm install
 ```
 
-Frontend:
+### 3. Configure Environment Variables
+
 ```bash
 cd apps/web
 cp .env.example .env.local
-# Edit .env.local with:
-# - NEXT_PUBLIC_SERVER_URL (your backend URL, e.g., http://localhost:8080)
-# - NEXT_PUBLIC_LIVEKIT_URL (your LiveKit WebSocket URL from dashboard)
 ```
 
-**2. Start Services:**
+Edit `.env.local` with your LiveKit credentials:
 
-Terminal 1 - Backend:
 ```bash
-cd apps/server
-source .env  # Load environment variables
-go run main.go
+# Get these from https://cloud.livekit.io/
+LIVEKIT_API_KEY=your_api_key_here
+LIVEKIT_API_SECRET=your_api_secret_here
+LIVEKIT_URL=wss://your-project.livekit.cloud
 ```
 
-Terminal 2 - Frontend:
+### 4. Start Development Server
+
 ```bash
 cd apps/web
 pnpm dev
 ```
 
-**3. Access the Application:**
-- Open http://localhost:3000 in your browser
-- Enter your name and a room name
-- Click "Join Room" to connect
-- Open a second browser tab/window to test with multiple participants
+### 5. Open in Browser
 
-### Testing
+1. Open http://localhost:3000 in **Chrome Canary**
+2. Enter your name and a room code
+3. Select your preferred output language
+4. Click "Join Conference"
+5. Grant microphone permission when prompted
+6. Start speaking - watch real-time transcription and translation!
+
+### 6. Test with Multiple Participants
+
+Open a second tab or window and join the same room with a different name.
+
+**Note**: Only your own speech is transcribed (Web Speech API limitation). See [Limitations](#-limitations) below.
+
+## 📖 How It Works
+
+### Pipeline Architecture
+
+```
+Your Microphone
+      │
+      ▼
+┌─────────────┐
+│  LiveKit    │  Publishes audio to room
+│  (WebRTC)   │
+└──────┬──────┘
+       │
+       ▼
+┌──────────────────┐
+│ Speech Recognition│  Continuous transcription
+│  (Web Speech API) │
+└────────┬──────────┘
+         │
+         ▼ "Hello world"
+┌──────────────────┐
+│   Translation    │  Chrome Translation API
+│  (Chrome AI)     │
+└────────┬─────────┘
+         │
+         ▼ "안녕하세요"
+┌──────────────────┐
+│   Subtitles +    │  Display + speak
+│   TTS Output     │
+└──────────────────┘
+```
+
+### Component Flow
+
+1. **LiveKit Connection** (`useLiveKit.ts`)
+   - Connects to LiveKit room with JWT token
+   - Publishes local audio track
+   - Receives remote participants' audio
+
+2. **Speech-to-Text** (`useSTT.ts`)
+   - Captures microphone input via Web Speech API
+   - Continuous recognition with auto-restart
+   - Emits final transcription results
+
+3. **Translation** (`useTranslation.ts`)
+   - Receives transcription from STT
+   - Translates to user's target language
+   - Uses Chrome Translation API (or Prompt API fallback)
+
+4. **Text-to-Speech** (`useTTS.ts`)
+   - Speaks translated text
+   - Uses Web Speech Synthesis
+   - Auto-selects voice for target language
+
+5. **Orchestration** (`useConferenceOrchestrator.ts`)
+   - Coordinates entire pipeline
+   - Manages state synchronization
+   - Handles errors and capability checking
+
+### State Management
+
+- **Context API** for global state
+- **Custom hooks** for each feature
+- **React Reducer pattern** for complex state updates
+- **localStorage** for persisted preferences
+
+## 📚 Documentation
+
+- **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture and design
+- **[Chrome AI Setup](docs/CHROME_AI_SETUP.md)** - Detailed Chrome setup guide
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+
+## ⚠️ Limitations
+
+### Current Limitations
+
+1. **Local Participant Only**
+   - Only your own speech is transcribed
+   - Web Speech API limitation (requires getUserMedia microphone)
+   - **Workaround**: Each participant transcribes their own speech (future: sync via LiveKit data channel)
+
+2. **Browser Requirements**
+   - Requires Chrome Canary or Edge Dev
+   - Chrome Built-in AI features are experimental
+   - Not available in Firefox or Safari
+
+3. **Language Detection**
+   - STT language currently hardcoded to English
+   - **Planned**: Auto-detect speaking language
+
+4. **Performance**
+   - CPU-intensive on-device processing
+   - Recommended: 8GB+ RAM
+   - Best with 2-4 participants
+
+5. **Translation Quality**
+   - Depends on Chrome's on-device models
+   - Some language pairs may be less accurate
+   - Long sentences may fail
+
+### Planned Enhancements
+
+- **LiveKit Data Channel** - Sync transcriptions between participants
+- **Language Auto-Detection** - Detect speaking language automatically
+- **Server-Side STT** - Optional cloud transcription for remote participants
+- **Video Support** - Currently audio-only
+- **Mobile App** - React Native implementation
+- **Export History** - Save conversation transcripts
+
+## 🧪 Testing
 
 ```bash
-# Run Go tests
-cd apps/server && go test ./...
+# Type check
+cd apps/web
+pnpm tsc
 
-# Run frontend tests
-cd apps/web && pnpm test
-```
+# Build check
+pnpm build
 
 ### Deployment Strategy
 

@@ -148,8 +148,9 @@ export function useLiveKit({
             const errJson = await response.json();
             const msg = errJson?.error || JSON.stringify(errJson);
             throw new Error(
-              msg ? `Failed to get access token (${response.status}): ${msg}` :
-                `Failed to get access token (${response.status})`
+              msg
+                ? `Failed to get access token (${response.status}): ${msg}`
+                : `Failed to get access token (${response.status})`
             );
           } catch {
             throw new Error(`Failed to get access token (${response.status})`);

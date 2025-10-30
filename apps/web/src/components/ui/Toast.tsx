@@ -117,7 +117,8 @@ export interface ToastContainerProps {
 export function ToastContainer({ toasts, onClose }: ToastContainerProps) {
   return (
     <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 pointer-events-none">
-      {toasts.map((toast) => (
+      {/* Limit to 3 most recent toasts per UX spec (front-end-spec.md:582) */}
+      {toasts.slice(-3).map((toast) => (
         <div key={toast.id} className="pointer-events-auto">
           <Toast {...toast} onClose={onClose} />
         </div>

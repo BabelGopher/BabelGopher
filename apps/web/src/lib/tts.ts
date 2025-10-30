@@ -249,7 +249,10 @@ export class TTSService {
       // Cancel any ongoing/pending speech first; then give synth a moment to flush
       try {
         if (typeof window !== "undefined" && window.speechSynthesis) {
-          if (window.speechSynthesis.speaking || (window.speechSynthesis as any).pending) {
+          if (
+            window.speechSynthesis.speaking ||
+            (window.speechSynthesis as any).pending
+          ) {
             window.speechSynthesis.cancel();
           }
         }

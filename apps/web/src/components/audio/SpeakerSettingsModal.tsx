@@ -45,7 +45,11 @@ export const SpeakerSettingsModal: React.FC<SpeakerSettingsModalProps> = ({
     setTestError('');
     try {
       // Create simple test tone (A4 note: 440Hz)
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) {
+        throw new Error('AudioContext not supported');
+      }
+      const audioContext = new AudioContextClass();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
 

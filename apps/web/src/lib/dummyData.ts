@@ -15,6 +15,7 @@ export const generateDummySubtitle = (
   speaker: Participant,
   original: string,
   translated: string,
+  languageCode?: string,
   isProcessing: boolean = false
 ): Subtitle => {
   subtitleIdCounter++;
@@ -24,30 +25,35 @@ export const generateDummySubtitle = (
     originalText: original,
     translatedText: translated,
     timestamp: Date.now(),
+    languageCode,
     isProcessing,
   };
 };
 
-export const getInitialDummySubtitles = (): Subtitle[] => [
+export const getInitialDummySubtitles = (languageCode: string = 'ko'): Subtitle[] => [
   generateDummySubtitle(
     DUMMY_PARTICIPANTS[1],
     "Hello everyone, good morning!",
-    "¡Hola a todos, buenos días!"
+    "¡Hola a todos, buenos días!",
+    languageCode
   ),
   generateDummySubtitle(
     DUMMY_PARTICIPANTS[0],
     "Good morning, Bob!",
-    "¡Buenos días, Bob!"
+    "¡Buenos días, Bob!",
+    languageCode
   ),
   generateDummySubtitle(
     DUMMY_PARTICIPANTS[1],
     "I'm excited to discuss this project.",
-    "Estoy emocionado de discutir este proyecto."
+    "Estoy emocionado de discutir este proyecto.",
+    languageCode
   ),
   generateDummySubtitle(
     DUMMY_PARTICIPANTS[3],
     "Let's start with the architecture overview.",
-    "Comencemos con la descripción general de la arquitectura."
+    "Comencemos con la descripción general de la arquitectura.",
+    languageCode
   ),
 ];
 

@@ -17,9 +17,9 @@ declare global {
           topK?: number;
         }): Promise<AILanguageModel>;
       };
-      assistant?: any;
-      summarizer?: any;
-      translator?: any;
+      assistant?: unknown;
+      summarizer?: unknown;
+      translator?: unknown;
     };
   }
 }

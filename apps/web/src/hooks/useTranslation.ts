@@ -1,13 +1,16 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from "react";
+import { createComponentLogger } from "../lib/logger";
+const log = createComponentLogger("Translation");
 import {
   checkTranslationCapabilities,
   createTranslator,
   TranslationOptions,
-} from '../lib/translation';
+  Translator,
+} from "../lib/translation";
 import {
   isValidLanguageCode,
   SupportedLanguageCode,
-} from '@/components/LanguageSelector';
+} from "@/components/LanguageSelector";
 
 export interface TranslationSegment {
   originalText: string;
@@ -24,6 +27,8 @@ export interface UseTranslationResult {
   isTranslating: boolean;
   translationError: string | null;
   isTranslationAvailable: boolean;
+  isDownloading: boolean;
+  downloadProgress: number; // 0-100
   translateText: (
     text: string,
     options: {
@@ -33,6 +38,7 @@ export interface UseTranslationResult {
       participantName?: string;
     }
   ) => Promise<string | null>;
+  preloadTranslator: (targetLang: string, sourceLang?: string) => Promise<void>;
   clearTranslations: () => void;
 }
 
@@ -45,16 +51,18 @@ export function useTranslation(): UseTranslationResult {
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
   const [isTranslationAvailable, setIsTranslationAvailable] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
   // Cache translators for different language pairs to avoid re-initialization
-  const translatorsRef = useRef<Map<string, any>>(new Map());
+  const translatorsRef = useRef<Map<string, Translator>>(new Map());
 
   // Check translation availability on mount
   useEffect(() => {
     checkTranslationCapabilities().then((capabilities) => {
       setIsTranslationAvailable(capabilities.isAvailable);
       if (!capabilities.isAvailable) {
-        setTranslationError(capabilities.error || 'Translation not available');
+        setTranslationError(capabilities.error || "Translation not available");
       }
     });
 
@@ -85,6 +93,10 @@ export function useTranslation(): UseTranslationResult {
       const translator = await createTranslator({
         sourceLang,
         targetLang,
+        onProgress: (p) => {
+          setIsDownloading(p < 100);
+          setDownloadProgress(p);
+        },
       });
 
       if (translator) {
@@ -94,6 +106,22 @@ export function useTranslation(): UseTranslationResult {
       return translator;
     },
     []
+  );
+
+  const preloadTranslator = useCallback(
+    async (targetLang: string, sourceLang: string = "en") => {
+      setIsDownloading(true);
+      setDownloadProgress(0);
+      try {
+        const translator = await getTranslator(sourceLang, targetLang);
+        if (translator) {
+          // warm-up call with empty string is unnecessary; just caching is fine
+        }
+      } finally {
+        setIsDownloading(false);
+      }
+    },
+    [getTranslator]
   );
 
   /**
@@ -114,11 +142,11 @@ export function useTranslation(): UseTranslationResult {
       }
 
       if (!isTranslationAvailable) {
-        console.warn('[Translation] Translation API not available');
+        console.warn("[Translation] Translation API not available");
         return null;
       }
 
-      const sourceLang = options.sourceLang || 'auto';
+      const sourceLang = options.sourceLang || "auto";
       const { targetLang, participantId, participantName } = options;
 
       setIsTranslating(true);
@@ -131,16 +159,51 @@ export function useTranslation(): UseTranslationResult {
         const translator = await getTranslator(sourceLang, targetLang);
 
         if (!translator) {
-          throw new Error('Failed to create translator');
+          throw new Error(
+            `Failed to create translator for ${sourceLang} → ${targetLang}`
+          );
         }
 
-        // Perform translation
-        const translatedText = await translator.translate(text);
+        // Perform translation with retry logic (for transient failures)
+        let translatedText: string | null = null;
+        let lastError: Error | null = null;
+        const maxRetries = 2;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            translatedText = await translator.translate(text);
+            break; // Success, exit retry loop
+          } catch (translateError) {
+            lastError =
+              translateError instanceof Error
+                ? translateError
+                : new Error("Translation failed");
+            console.warn(
+              `[Translation] Attempt ${attempt + 1}/${maxRetries + 1} failed:`,
+              lastError.message
+            );
+
+            if (attempt < maxRetries) {
+              // Wait before retrying (50ms, 100ms)
+              await new Promise((resolve) =>
+                setTimeout(resolve, 50 * (attempt + 1))
+              );
+            }
+          }
+        }
+
+        if (!translatedText) {
+          // All retries failed, throw last error
+          throw lastError || new Error("Translation failed after retries");
+        }
+
         const latency = performance.now() - startTime;
 
-        console.log(
-          `[Translation] ${sourceLang} → ${targetLang}: "${text.substring(0, 30)}..." → "${translatedText.substring(0, 30)}..." (${latency.toFixed(0)}ms)`
-        );
+        log.info("Translated", {
+          sourceLang,
+          targetLang,
+          latencyMs: Math.round(latency),
+        });
 
         // Add to translations history
         const segment: TranslationSegment = {
@@ -157,10 +220,14 @@ export function useTranslation(): UseTranslationResult {
 
         return translatedText;
       } catch (error) {
-        console.error('[Translation] Translation failed:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Translation failed';
+        log.error("Translation failed after all retries", error as Error);
+        const errorMessage =
+          error instanceof Error ? error.message : "Translation failed";
         setTranslationError(errorMessage);
-        return null;
+
+        // Fallback: return original text
+        log.warn("Falling back to original text");
+        return text;
       } finally {
         setIsTranslating(false);
       }
@@ -180,7 +247,10 @@ export function useTranslation(): UseTranslationResult {
     isTranslating,
     translationError,
     isTranslationAvailable,
+    isDownloading,
+    downloadProgress,
     translateText,
+    preloadTranslator,
     clearTranslations,
   };
 }
@@ -188,12 +258,15 @@ export function useTranslation(): UseTranslationResult {
 /**
  * Hook for managing user's target language preference
  */
-export function useTargetLanguage(defaultLanguage: SupportedLanguageCode = 'en') {
-  const [targetLanguage, setTargetLanguage] = useState<SupportedLanguageCode>(defaultLanguage);
+export function useTargetLanguage(
+  defaultLanguage: SupportedLanguageCode = "en"
+) {
+  const [targetLanguage, setTargetLanguage] =
+    useState<SupportedLanguageCode>(defaultLanguage);
 
   // Persist target language to localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('babelgopher:targetLanguage');
+    const saved = localStorage.getItem("babelgopher:targetLanguage");
     // ✅ FIX: Validate language code from localStorage before setting state
     if (saved && isValidLanguageCode(saved)) {
       setTargetLanguage(saved);
@@ -202,7 +275,7 @@ export function useTargetLanguage(defaultLanguage: SupportedLanguageCode = 'en')
 
   const updateTargetLanguage = useCallback((lang: SupportedLanguageCode) => {
     setTargetLanguage(lang);
-    localStorage.setItem('babelgopher:targetLanguage', lang);
+    localStorage.setItem("babelgopher:targetLanguage", lang);
   }, []);
 
   return {

@@ -150,7 +150,9 @@ function ConferenceRoomContent() {
 
   const handleToggleTranscription = () => {
     if (!isConnected) {
-      showWarning("아직 회의실에 연결되지 않았어요. 연결 후 다시 시도해 주세요.");
+      showWarning(
+        "아직 회의실에 연결되지 않았어요. 연결 후 다시 시도해 주세요."
+      );
       return;
     }
     if (isTranscribing) {
@@ -182,7 +184,9 @@ function ConferenceRoomContent() {
       {showPrejoin && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">회의 시작 전에 설정을 완료해 주세요</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              회의 시작 전에 설정을 완료해 주세요
+            </h2>
             <div className="mb-4">
               <LanguageSelector
                 selectedLanguage={prejoinLang}
@@ -194,17 +198,28 @@ function ConferenceRoomContent() {
                 onClick={async () => {
                   try {
                     // Unlock TTS & audio autoplay
-                    if (typeof window !== "undefined" && window.speechSynthesis) {
-                      try { window.speechSynthesis.resume(); } catch {}
+                    if (
+                      typeof window !== "undefined" &&
+                      window.speechSynthesis
+                    ) {
+                      try {
+                        window.speechSynthesis.resume();
+                      } catch {}
                     }
-                    try { await TTSService.initialize(); } catch {}
+                    try {
+                      await TTSService.initialize();
+                    } catch {}
                     // Apply language
                     setLanguage(prejoinLang);
                     // Persist prejoin completion for this tab session
-                    try { sessionStorage.setItem("bg:prejoin", "1"); } catch {}
+                    try {
+                      sessionStorage.setItem("bg:prejoin", "1");
+                    } catch {}
                     setShowPrejoin(false);
                     // Attempt to start audio playout if room already exists
-                    try { await startAudio(); } catch {}
+                    try {
+                      await startAudio();
+                    } catch {}
                   } catch {}
                 }}
                 className="w-full py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700"
