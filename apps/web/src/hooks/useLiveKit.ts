@@ -295,35 +295,76 @@ export function useLiveKit({
           log.warn("Audio playout not started (user gesture likely required)");
         }
 
-        // Enable local audio (best-effort)
+        // Enable local audio with explicit microphone permission
         try {
+          // First, ensure we have microphone permission
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
+          });
+
+          // Stop the stream as we'll use LiveKit's track creation
+          stream.getTracks().forEach(track => track.stop());
+
+          // Now create the LiveKit audio track
           const audioTrack = await createLocalAudioTrack({
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
           });
 
-          const publication = await newRoom.localParticipant.publishTrack(
-            audioTrack
-          );
-
-          // Ensure the audio track is enabled and unmuted
-          // Both the track itself and the publication need to be active
+          // Ensure the underlying MediaStreamTrack is enabled
           if (audioTrack.mediaStreamTrack) {
             audioTrack.mediaStreamTrack.enabled = true;
+            log.info("MediaStreamTrack state", {
+              id: audioTrack.mediaStreamTrack.id,
+              enabled: audioTrack.mediaStreamTrack.enabled,
+              readyState: audioTrack.mediaStreamTrack.readyState,
+              muted: audioTrack.mediaStreamTrack.muted,
+              label: audioTrack.mediaStreamTrack.label
+            });
           }
 
-          // Automatically unmute the microphone after publishing
-          // LiveKit publications start muted by default, so we need to explicitly unmute
-          await publication.unmute();
+          const publication = await newRoom.localParticipant.publishTrack(
+            audioTrack,
+            {
+              name: 'microphone',
+              stream: 'main-audio'
+            }
+          );
+
+          // Start muted by default - users need to explicitly unmute
+          await publication.mute();
 
           setLocalAudioTrack(publication);
+
+          // Monitor MediaStreamTrack state to verify actual audio capture
+          let audioLevelCheckCount = 0;
+          const checkAudioLevel = setInterval(() => {
+            if (audioTrack?.mediaStreamTrack) {
+              log.debug("MediaStreamTrack check", {
+                enabled: audioTrack.mediaStreamTrack.enabled,
+                readyState: audioTrack.mediaStreamTrack.readyState,
+                isMuted: publication.isMuted
+              });
+              audioLevelCheckCount++;
+              if (audioLevelCheckCount >= 3) {
+                clearInterval(checkAudioLevel);
+              }
+            }
+          }, 1000);
 
           log.info("Local audio track initialized", {
             isMuted: publication.isMuted,
             trackSid: publication.trackSid,
+            trackName: publication.trackName,
             trackEnabled: audioTrack.mediaStreamTrack?.enabled,
-            readyState: audioTrack.mediaStreamTrack?.readyState
+            readyState: audioTrack.mediaStreamTrack?.readyState,
+            constraints: audioTrack.mediaStreamTrack?.getConstraints?.(),
+            settings: audioTrack.mediaStreamTrack?.getSettings?.()
           });
         } catch (deviceError) {
           // Gracefully continue without a published local track; user may enable mic later
@@ -476,8 +517,8 @@ export function useLiveKit({
 
         publication = await room.localParticipant.publishTrack(newTrack);
 
-        // Immediately unmute after publishing
-        await publication.unmute();
+        // Don't automatically unmute - let user control the state
+        // The first toggle will unmute it
 
         setLocalAudioTrack(publication);
       }
@@ -486,8 +527,35 @@ export function useLiveKit({
       const newMutedState = !publication.isMuted;
       if (newMutedState) {
         await publication.mute();
+        log.info("Microphone muted", {
+          trackSid: publication.trackSid,
+          isMuted: publication.isMuted
+        });
       } else {
         await publication.unmute();
+
+        // Ensure the MediaStreamTrack is also enabled when unmuting
+        const track = publication.track;
+        if (track && track.mediaStreamTrack) {
+          track.mediaStreamTrack.enabled = true;
+        }
+
+        log.info("Microphone unmuted", {
+          trackSid: publication.trackSid,
+          isMuted: publication.isMuted,
+          trackEnabled: track?.mediaStreamTrack?.enabled
+        });
+
+        // Check audio levels after unmute
+        if (track && 'audioLevel' in track) {
+          setTimeout(() => {
+            const audioTrack = track as { audioLevel?: number };
+            log.info("Audio level after unmute", {
+              level: audioTrack.audioLevel,
+              trackSid: publication.trackSid
+            });
+          }, 500);
+        }
       }
 
       updateParticipants();
@@ -532,9 +600,11 @@ export function useLiveKit({
           newTrack
         );
 
-        // Ensure it's unmuted if the previous track was unmuted
-        const wasUnmuted = localAudioTrack && !localAudioTrack.isMuted;
-        if (wasUnmuted) {
+        // Keep the same mute state as before
+        const wasMuted = localAudioTrack ? localAudioTrack.isMuted : true;
+        if (wasMuted) {
+          await publication.mute();
+        } else {
           await publication.unmute();
         }
 

@@ -471,15 +471,19 @@ export function useSTT(): UseSTTResult {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Copy refs to local variables to avoid React warnings
+      const activeTranscriptions = activeTranscriptionsRef.current;
+      const segments = segmentRef.current;
+
       // Stop all active transcriptions
-      activeTranscriptionsRef.current.forEach((_, participantId) => {
+      activeTranscriptions.forEach((_, participantId) => {
         stopTranscription(participantId);
       });
       // Clear any remaining segmentation timers
-      segmentRef.current.forEach((seg) => {
+      segments.forEach((seg) => {
         if (seg.timer) clearTimeout(seg.timer);
       });
-      segmentRef.current.clear();
+      segments.clear();
     };
   }, [stopTranscription]);
 

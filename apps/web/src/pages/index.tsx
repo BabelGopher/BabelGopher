@@ -76,6 +76,7 @@ export default function LobbyPage() {
 
         {/* Mobile Background Gopher - Hero element */}
         <div className="md:hidden absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/images/transparant-gopher.png"
             alt=""

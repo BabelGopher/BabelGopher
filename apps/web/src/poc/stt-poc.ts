@@ -11,7 +11,7 @@
  * 4. Document results below before proceeding to full implementation
  */
 
-import { Room, RemoteAudioTrack, RemoteParticipant } from 'livekit-client';
+import { RemoteAudioTrack } from 'livekit-client';
 import { checkChromeAI, initializePromptAPI, transcribeAudio } from '../lib/chromeAI';
 
 export interface PoCResult {

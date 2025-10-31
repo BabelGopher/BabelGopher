@@ -159,6 +159,7 @@ export function useTTS(
     message?.id,
     message?.text,
     message?.lang,
+    message,
     isTTSAvailable,
     speak,
     cancel,

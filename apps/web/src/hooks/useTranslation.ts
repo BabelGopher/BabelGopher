@@ -4,7 +4,6 @@ const log = createComponentLogger("Translation");
 import {
   checkTranslationCapabilities,
   createTranslator,
-  TranslationOptions,
   Translator,
 } from "../lib/translation";
 import {
@@ -68,12 +67,14 @@ export function useTranslation(): UseTranslationResult {
 
     // Cleanup translators on unmount
     return () => {
-      translatorsRef.current.forEach((translator) => {
+      // Copy ref to local variable to avoid React warning
+      const translators = translatorsRef.current;
+      translators.forEach((translator) => {
         if (translator && translator.destroy) {
           translator.destroy();
         }
       });
-      translatorsRef.current.clear();
+      translators.clear();
     };
   }, []);
 
