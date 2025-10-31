@@ -216,6 +216,11 @@ export function useConferenceOrchestrator({
   const partialTranslateTimerRef = useRef<Map<string, number>>(new Map());
   const partialLastTextRef = useRef<Map<string, string>>(new Map());
 
+  // Queue for remote TTS when in WebRTC mode; key is speakerId (participant sid)
+  const pendingRemoteTtsRef = useRef<Map<string, string[]>>(new Map());
+  const prevSpeakingMapRef = useRef<Map<string, boolean>>(new Map());
+  const remoteTtsTailTimerRef = useRef<Map<string, number>>(new Map());
+
   // Sync LiveKit participants to global state
   useEffect(() => {
     if (liveKitParticipants.length > 0) {
@@ -730,12 +735,22 @@ export function useConferenceOrchestrator({
           setSubtitles([...current, subtitle].slice(-200));
         }
 
-        // In TTS-only listening mode, speak the translated text
+        // In TTS-only listening mode, speak the translated text immediately
         if (settings?.listeningMode === "tts_only") {
           try {
             if (isTTSAvailable && translatedText) {
               noteTtsUtterance(translatedText);
               speak(translatedText, targetLanguage);
+            }
+          } catch {}
+        } else if (settings?.listeningMode === "webrtc") {
+          // In WebRTC mode, enqueue remote TTS to play after speaker stops
+          try {
+            const speakerId = msg.speakerId || "remote";
+            const q = pendingRemoteTtsRef.current.get(speakerId) || [];
+            if (translatedText && translatedText.trim().length > 0) {
+              q.push(translatedText);
+              pendingRemoteTtsRef.current.set(speakerId, q);
             }
           } catch {}
         }
@@ -759,6 +774,59 @@ export function useConferenceOrchestrator({
     isTTSAvailable,
     speak,
     settings?.listeningMode,
+    noteTtsUtterance,
+  ]);
+
+  // Flush queued remote TTS after a remote participant stops speaking (WebRTC mode)
+  useEffect(() => {
+    if (!globalParticipants || globalParticipants.length === 0) return;
+    if (settings?.listeningMode !== "webrtc") return;
+
+    const prev = prevSpeakingMapRef.current;
+    const next = new Map<string, boolean>();
+
+    globalParticipants.forEach((p) => {
+      next.set(p.id, p.isSpeaking);
+      const wasSpeaking = prev.get(p.id) || false;
+      const nowSpeaking = p.isSpeaking;
+      const isRemote = !p.isSelf;
+
+      // Detect transition: speaking -> silent
+      if (isRemote && wasSpeaking && !nowSpeaking) {
+        try {
+          // Debounce per speaker with a small tail window
+          const existing = remoteTtsTailTimerRef.current.get(p.id);
+          if (existing) clearTimeout(existing);
+          const timer = window.setTimeout(async () => {
+            try {
+              const queue = pendingRemoteTtsRef.current.get(p.id) || [];
+              if (queue.length === 0) return;
+              if (!isTTSAvailable || !isTtsEnabled) return;
+
+              // Speak items sequentially
+              while (queue.length > 0) {
+                const text = queue.shift() as string;
+                if (!text) continue;
+                noteTtsUtterance(text);
+                await speak(text, targetLanguage);
+              }
+              pendingRemoteTtsRef.current.set(p.id, queue);
+            } catch {}
+          }, 400);
+          remoteTtsTailTimerRef.current.set(p.id, timer);
+        } catch {}
+      }
+    });
+
+    // Save snapshot for next diff
+    prevSpeakingMapRef.current = next;
+  }, [
+    globalParticipants,
+    settings?.listeningMode,
+    isTTSAvailable,
+    isTtsEnabled,
+    speak,
+    targetLanguage,
     noteTtsUtterance,
   ]);
 
