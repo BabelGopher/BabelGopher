@@ -88,12 +88,12 @@ function ConferenceRoomContent() {
 
   // Auto-start transcription at most once per mount when ready
   useEffect(() => {
-    if (!autoStartAttempted && canStartSTT) {
+    if (!autoStartAttempted && canStartSTT && !isMuted) {
       console.log("[Conference] Auto-starting transcription...");
       setAutoStartAttempted(true);
       startTranscription();
     }
-  }, [canStartSTT, autoStartAttempted, startTranscription]);
+  }, [canStartSTT, isMuted, autoStartAttempted, startTranscription]);
 
   // Mark as started only after transcription actually begins
   useEffect(() => {

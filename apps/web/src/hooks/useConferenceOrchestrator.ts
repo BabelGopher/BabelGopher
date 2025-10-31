@@ -201,8 +201,11 @@ export function useConferenceOrchestrator({
   // Track local participant ID for transcription
   const localParticipantIdRef = useRef<string | null>(null);
   const canStartSTT = useMemo(
-    () => isConnected && liveKitParticipants.some((p) => p.isSelf && !!p.sid),
-    [isConnected, liveKitParticipants]
+    () =>
+      isConnected &&
+      !isMuted &&
+      liveKitParticipants.some((p) => p.isSelf && !!p.sid),
+    [isConnected, isMuted, liveKitParticipants]
   );
   // Track processed transcription ids to avoid duplicate processing
   const processedIdsRef = useRef<Set<string>>(new Set());
@@ -264,6 +267,12 @@ export function useConferenceOrchestrator({
       return;
     }
 
+    // Do not start STT while muted
+    if (isMuted) {
+      showError("음소거 상태에서는 음성 인식을 시작할 수 없어요.");
+      return;
+    }
+
     // Prevent redundant starts if already transcribing
     if (isTranscribing) {
       log.info("STT already running, skipping start");
@@ -295,6 +304,7 @@ export function useConferenceOrchestrator({
     }
   }, [
     isConnected,
+    isMuted,
     isSTTAvailable,
     isTranscribing,
     startLocalTranscription,
@@ -309,6 +319,27 @@ export function useConferenceOrchestrator({
       log.info("Stopped transcription");
     }
   }, [stopSTT]);
+
+  // Auto stop/start STT when mute state changes
+  useEffect(() => {
+    if (!isConnected) return;
+    if (isMuted) {
+      if (isTranscribing) {
+        stopTranscription();
+      }
+    } else {
+      if (!isTranscribing && canStartSTT) {
+        void startTranscription();
+      }
+    }
+  }, [
+    isConnected,
+    isMuted,
+    isTranscribing,
+    canStartSTT,
+    startTranscription,
+    stopTranscription,
+  ]);
 
   // Restart transcription when target language changes (to update STT language)
   const previousTargetLanguageRef = useRef(targetLanguage);
