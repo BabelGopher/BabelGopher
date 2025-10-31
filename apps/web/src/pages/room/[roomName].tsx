@@ -191,7 +191,7 @@ function ConferenceRoomContent() {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              회의 시작 전에 설정을 완료해 주세요
+              Please complete your settings before starting the conference
             </h2>
             <div className="mb-4">
               <LanguageSelector
@@ -230,7 +230,7 @@ function ConferenceRoomContent() {
                 }}
                 className="w-full py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700"
               >
-                오디오 활성화하고 시작하기
+                Activate Audio and Start
               </button>
             </div>
           </div>
@@ -324,12 +324,12 @@ function ConferenceRoomContent() {
       {/* Disconnected Retry Banner */}
       {!isConnected && !isConnecting && (
         <div className="absolute bottom-24 right-4 bg-yellow-500 text-black text-sm px-3 py-2 rounded shadow-lg flex items-center gap-3">
-          <span>연결이 원활하지 않아요.</span>
+          <span>Connection is unstable.</span>
           <button
             onClick={() => reconnect()}
             className="bg-black/20 hover:bg-black/30 text-black font-semibold px-2 py-1 rounded"
           >
-            재시도
+            Retry
           </button>
         </div>
       )}

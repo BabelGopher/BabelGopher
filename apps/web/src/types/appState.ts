@@ -102,7 +102,7 @@ export const createInitialState = (): AppState => ({
   settings: {
     isTtsEnabled: true,
     isSubtitleEnabled: true,
-    selectedLanguage: "ko",
+    selectedLanguage: "en",
     audioDevices: {
       microphone: "default",
       speaker: "default",

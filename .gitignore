@@ -54,3 +54,7 @@ temp/
 
 # Debug
 .ai/debug-log.md
+
+docs/
+.bmad-core/
+.claude/

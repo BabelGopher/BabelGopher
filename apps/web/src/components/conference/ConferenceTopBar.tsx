@@ -16,7 +16,7 @@ export function ConferenceTopBar({ roomName, onExit }: ConferenceTopBarProps) {
         <h1 className="font-heading text-2xl text-white truncate">{roomName}</h1>
       </div>
 
-      <Button variant="danger" size="md" onClick={onExit} aria-label="Exit conference">
+      <Button variant="danger" size="sm" onClick={onExit} aria-label="Exit conference">
         ❌ Exit
       </Button>
     </header>
