@@ -10,6 +10,7 @@ import {
   ParticipantEvent,
   ConnectionState,
   createLocalAudioTrack,
+  AudioPresets,
 } from "livekit-client";
 import { createComponentLogger } from "../lib/logger";
 
@@ -166,10 +167,22 @@ export function useLiveKit({
           throw new Error("Invalid token response");
         }
 
-        // Create room instance
+        // Create room instance with proper audio configuration
         const newRoom = new Room({
           adaptiveStream: true,
           dynacast: true,
+          // Ensure audio tracks are properly configured
+          audioCaptureDefaults: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          // Ensure tracks are published with correct settings
+          publishDefaults: {
+            audioPreset: AudioPresets.music, // Use high-quality audio preset
+            dtx: false, // Disable discontinuous transmission for consistent audio
+            red: true, // Enable redundancy encoding for better reliability
+          },
         });
 
         roomRef.current = newRoom;
@@ -225,10 +238,13 @@ export function useLiveKit({
 
         newRoom.on(
           RoomEvent.TrackSubscribed,
-          (track: RemoteTrack, publication: RemoteTrackPublication) => {
-            log.debug("Track subscribed", {
+          (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+            log.info("Track subscribed", {
               kind: track.kind,
               trackSid: publication.trackSid,
+              participantSid: participant?.sid,
+              participantIdentity: participant?.identity,
+              isLocal: false, // RemoteTrack is always from a remote participant
             });
             // Enforce remote playout preference: if disabled, immediately unsubscribe audio
             try {
@@ -237,6 +253,7 @@ export function useLiveKit({
                 remotePlayoutEnabledRef.current === false
               ) {
                 publication.setSubscribed(false);
+                log.info("Unsubscribing from remote audio due to TTS-only mode");
               }
             } catch {}
             updateParticipants();
@@ -289,7 +306,25 @@ export function useLiveKit({
           const publication = await newRoom.localParticipant.publishTrack(
             audioTrack
           );
+
+          // Ensure the audio track is enabled and unmuted
+          // Both the track itself and the publication need to be active
+          if (audioTrack.mediaStreamTrack) {
+            audioTrack.mediaStreamTrack.enabled = true;
+          }
+
+          // Automatically unmute the microphone after publishing
+          // LiveKit publications start muted by default, so we need to explicitly unmute
+          await publication.unmute();
+
           setLocalAudioTrack(publication);
+
+          log.info("Local audio track initialized", {
+            isMuted: publication.isMuted,
+            trackSid: publication.trackSid,
+            trackEnabled: audioTrack.mediaStreamTrack?.enabled,
+            readyState: audioTrack.mediaStreamTrack?.readyState
+          });
         } catch (deviceError) {
           // Gracefully continue without a published local track; user may enable mic later
           log.error(
@@ -303,12 +338,28 @@ export function useLiveKit({
           updateParticipants();
         });
 
-        newRoom.localParticipant.on(ParticipantEvent.TrackMuted, () => {
+        newRoom.localParticipant.on(ParticipantEvent.TrackMuted, (publication) => {
+          log.info("Local track muted", {
+            trackSid: publication.trackSid,
+            kind: publication.kind
+          });
           updateParticipants();
         });
 
-        newRoom.localParticipant.on(ParticipantEvent.TrackUnmuted, () => {
+        newRoom.localParticipant.on(ParticipantEvent.TrackUnmuted, (publication) => {
+          log.info("Local track unmuted", {
+            trackSid: publication.trackSid,
+            kind: publication.kind
+          });
           updateParticipants();
+        });
+
+        newRoom.localParticipant.on(ParticipantEvent.TrackPublished, (publication) => {
+          log.info("Local track published", {
+            trackSid: publication.trackSid,
+            kind: publication.kind,
+            isMuted: publication.isMuted
+          });
         });
 
         updateParticipants();
@@ -418,7 +469,16 @@ export function useLiveKit({
           autoGainControl: true,
         });
 
+        // Ensure the track is enabled
+        if (newTrack.mediaStreamTrack) {
+          newTrack.mediaStreamTrack.enabled = true;
+        }
+
         publication = await room.localParticipant.publishTrack(newTrack);
+
+        // Immediately unmute after publishing
+        await publication.unmute();
+
         setLocalAudioTrack(publication);
       }
 
@@ -455,6 +515,11 @@ export function useLiveKit({
           autoGainControl: true,
         });
 
+        // Ensure the track is enabled
+        if (newTrack.mediaStreamTrack) {
+          newTrack.mediaStreamTrack.enabled = true;
+        }
+
         // Unpublish old track
         if (localAudioTrack) {
           await roomRef.current.localParticipant.unpublishTrack(
@@ -466,6 +531,13 @@ export function useLiveKit({
         const publication = await roomRef.current.localParticipant.publishTrack(
           newTrack
         );
+
+        // Ensure it's unmuted if the previous track was unmuted
+        const wasUnmuted = localAudioTrack && !localAudioTrack.isMuted;
+        if (wasUnmuted) {
+          await publication.unmute();
+        }
+
         setLocalAudioTrack(publication);
         updateParticipants();
       } catch (error) {
