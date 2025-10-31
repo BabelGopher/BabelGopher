@@ -98,7 +98,7 @@ export function useSTT(): UseSTTResult {
       }
     >
   >(new Map());
-  const silenceMs = 800;
+  const silenceMs = 500;
 
   // Check Speech Recognition availability on mount
   useEffect(() => {
