@@ -238,7 +238,7 @@ export function useLiveKit({
 
         newRoom.on(
           RoomEvent.TrackSubscribed,
-          (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+          async (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
             log.info("Track subscribed", {
               kind: track.kind,
               trackSid: publication.trackSid,
@@ -246,16 +246,35 @@ export function useLiveKit({
               participantIdentity: participant?.identity,
               isLocal: false, // RemoteTrack is always from a remote participant
             });
-            // Enforce remote playout preference: if disabled, immediately unsubscribe audio
-            try {
-              if (
-                publication.kind === "audio" &&
-                remotePlayoutEnabledRef.current === false
-              ) {
-                publication.setSubscribed(false);
-                log.info("Unsubscribing from remote audio due to TTS-only mode");
+
+            // For audio tracks, ensure playout is started
+            if (track.kind === "audio") {
+              // Enforce remote playout preference
+              if (remotePlayoutEnabledRef.current === false) {
+                try {
+                  publication.setSubscribed(false);
+                  log.info("Unsubscribing from remote audio due to TTS-only mode");
+                } catch {}
+              } else {
+                // Ensure audio playout is started for remote tracks
+                try {
+                  await newRoom.startAudio();
+                  log.info("Started audio playout for remote track");
+                } catch (e) {
+                  log.warn("Could not start audio playout automatically");
+                }
+
+                // Attach the track to ensure it plays
+                const audioElement = track.attach();
+                if (audioElement) {
+                  audioElement.autoplay = true;
+                  document.body.appendChild(audioElement);
+                  audioElement.style.display = 'none';
+                  log.info("Remote audio element attached to DOM");
+                }
               }
-            } catch {}
+            }
+
             updateParticipants();
           }
         );
@@ -663,15 +682,48 @@ export function useLiveKit({
       remotePlayoutEnabledRef.current = enabled;
       const currentRoom = roomRef.current;
       if (!currentRoom) return;
+
+      log.info("Setting remote audio playout", { enabled });
+
       try {
+        // If enabling, ensure audio is started first
+        if (enabled) {
+          try {
+            await currentRoom.startAudio();
+            log.info("Audio playout started for remote audio enable");
+          } catch (e) {
+            log.warn("Could not start audio playout");
+          }
+        }
+
+        // Update all remote participant audio subscriptions
         currentRoom.remoteParticipants.forEach((p) => {
           p.audioTrackPublications.forEach((pub) => {
             try {
               pub.setSubscribed(enabled);
-            } catch {}
+              log.debug("Set audio subscription", {
+                participantId: p.identity,
+                trackSid: pub.trackSid,
+                enabled
+              });
+
+              // If enabling, ensure the track is attached and playing
+              if (enabled && pub.track) {
+                const audioElement = pub.track.attach();
+                if (audioElement && !audioElement.parentElement) {
+                  audioElement.autoplay = true;
+                  document.body.appendChild(audioElement);
+                  audioElement.style.display = 'none';
+                }
+              }
+            } catch (e) {
+              log.error("Failed to set audio subscription", e as Error);
+            }
           });
         });
-      } catch {}
+      } catch (e) {
+        log.error("Failed to set remote audio playout", e as Error);
+      }
     },
   };
 }
