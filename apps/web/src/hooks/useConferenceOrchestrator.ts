@@ -212,6 +212,10 @@ export function useConferenceOrchestrator({
     subtitlesRef.current = subtitles;
   }, [subtitles]);
 
+  // Refs for managing debounced partial translations per segment
+  const partialTranslateTimerRef = useRef<Map<string, number>>(new Map());
+  const partialLastTextRef = useRef<Map<string, string>>(new Map());
+
   // Sync LiveKit participants to global state
   useEffect(() => {
     if (liveKitParticipants.length > 0) {
@@ -587,7 +591,78 @@ export function useConferenceOrchestrator({
       ].slice(-200);
     }
     setSubtitles(updated);
-  }, [partials, setSubtitles, isTtsSpeaking, isLikelyTtsEcho]);
+
+    // Real-time translation for partials (debounced)
+    try {
+      const sourceLang = (latest.language || "auto") as string;
+      const textToTranslate = latest.text.trim();
+
+      // If target equals source, just mirror original into translated partial
+      const mirrorOnly =
+        sourceLang !== "auto" && sourceLang.slice(0, 2) === targetLanguage;
+
+      // Skip if empty
+      if (!textToTranslate) return;
+
+      // Skip if text hasn't changed for this segment
+      const lastText = partialLastTextRef.current.get(subId);
+      if (lastText === textToTranslate) return;
+      partialLastTextRef.current.set(subId, textToTranslate);
+
+      // Clear any pending timer
+      const existing = partialTranslateTimerRef.current.get(subId);
+      if (existing) {
+        clearTimeout(existing);
+      }
+
+      const timer = window.setTimeout(async () => {
+        try {
+          let translatedPartial = textToTranslate;
+          if (!mirrorOnly && isTranslationAvailable) {
+            const maybe = await translateText(textToTranslate, {
+              sourceLang,
+              targetLang: targetLanguage,
+              participantId: latest.participantId,
+              participantName: latest.participantName,
+            });
+            if (maybe) translatedPartial = maybe;
+          }
+
+          // Ensure the partial hasn't advanced since we kicked off this translation
+          const stillLatest =
+            partialLastTextRef.current.get(subId) === textToTranslate;
+          if (!stillLatest) return;
+
+          // Update translatedTextPartial on the same subtitle entry
+          const current = subtitlesRef.current;
+          const idx = current.findIndex((s) => s.id === subId);
+          if (idx >= 0) {
+            const next = [...current];
+            next[idx] = {
+              ...next[idx],
+              translatedTextPartial: translatedPartial,
+              languageCode: targetLanguage,
+            };
+            setSubtitles(next);
+          }
+        } catch {
+          // ignore partial translation errors
+        }
+      }, 120); // small debounce to avoid excessive calls while user is speaking
+
+      partialTranslateTimerRef.current.set(subId, timer);
+    } catch {
+      // ignore partial translation scheduling errors
+    }
+  }, [
+    partials,
+    setSubtitles,
+    isTtsSpeaking,
+    isLikelyTtsEcho,
+    isTranslationAvailable,
+    targetLanguage,
+    translateText,
+  ]);
 
   // Receive remote transcription data via LiveKit
   useEffect(() => {
