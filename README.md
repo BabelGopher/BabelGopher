@@ -41,8 +41,6 @@ BabelGopher is our privacy-first, terrestrial take on the Babel fish. It helps y
 - **Twist**: Your translation data stays yours.
 - **Bonus**: No towel required (though a good mic helps avoid sounding like a malfunctioning robot).
 
-P.S. Prefer slides? Open `keynote.html` in your browser for the keynote-style walk‑through.
-
 ## ✨ Key Features
 
 - 🎤 **Real-time Speech-to-Text** - Continuous transcription using Web Speech API
@@ -277,7 +275,6 @@ Your Microphone
 - **Mobile App** - React Native implementation
 - **Export History** - Save conversation transcripts
 
-
 ## API Documentation
 
 ### Authentication Endpoint
@@ -287,12 +284,13 @@ Your Microphone
 Generate a LiveKit access token for joining a room.
 
 **Request Body:**
+
 ```json
 {
   "user_identity": "unique-user-id",
   "room_name": "room-name"
 }
-````
+```
 
 **Success Response (200 OK):**
 
