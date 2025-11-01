@@ -2,17 +2,46 @@
 
 > Real-time multilingual interpretation for audio conversations using 100% on-device AI
 
-**Chrome Built-in AI Challenge 2025**
+![BabelGopherLogo](./BabelGopher.png)
+
+## Table of Contents
+
+- [🐟 A Hitchhiker's Tale (The Babel Fish)](#-a-hitchhikers-tale-the-babel-fish)
+- [✨ Key Features](#-key-features)
+- [🛠️ Tech Stack](#️-tech-stack)
+- [🚀 Getting Started](#-getting-started)
+- [📖 How It Works](#-how-it-works)
+- [⚠️ Limitations](#️-limitations)
+- [🧪 Testing](#-testing)
+- [📚 Documentation](#-documentation)
+- [🌐 API Documentation](#-api-documentation)
+- [🏗️ Project Structure](#️-project-structure)
+- [📄 License](#-license)
 
 ## Overview
 
 BabelGopher breaks down language barriers in real-time video conferencing by combining:
+
 - **LiveKit WebRTC** for peer-to-peer audio communication
 - **Web Speech API** for speech-to-text transcription
 - **Chrome Translation API** for on-device translation
 - **Web Speech Synthesis** for natural voice output
 
 All AI processing happens **on-device** in your browser - no cloud APIs, no external servers for AI.
+
+## 🐟 A Hitchhiker’s Tale (The Babel Fish)
+
+> "...If you stick a Babel fish in your ear... you can instantly understand anything said to you in any form of language."
+>
+> — The Hitchhiker’s Guide to the Galaxy
+
+BabelGopher is our privacy-first, terrestrial take on the Babel fish. It helps you understand anyone in real time—while keeping the conversation content on your device. The audio may zip through a LiveKit SFU for speed, but the thinking (STT, translation, and TTS) happens locally. No galactic cloud AI peeking at your thoughts.
+
+- **Result**: Seamless conversation.
+- **Twist**: Your translation data stays yours.
+- **Bonus**: No towel required (though a good mic helps avoid sounding like a malfunctioning robot).
+
+P.S. Prefer slides? Open `keynote.html` in your browser for the keynote-style walk‑through.
 
 ## ✨ Key Features
 
@@ -22,18 +51,26 @@ All AI processing happens **on-device** in your browser - no cloud APIs, no exte
 - 💬 **Live Subtitles** - Side-by-side original + translated text
 - 🎛️ **User Controls** - Language selection, TTS toggle, subtitle toggle
 - 👥 **Multi-Participant** - Support for multiple participants via LiveKit
-- 🔒 **Privacy-First** - All AI processing on-device, no cloud uploads
+- 🔒 **Privacy-First** - All AI processing on-device, no cloud uploads (because your words are yours, not some AI overlord's)
 - ⚡ **Low Latency** - Typical pipeline: <500ms from speech to translated audio
+
+### What's Been Built So Far
+
+- **Phase 1**: Monorepo setup, LiveKit audio rooms, participant management
+- **Phase 2**: Chrome AI STT & translation, multi-lang support, TTS with echo cancellation
+- **Phase 3**: Subtitle UI, language controls, accessibility (WCAG AA), responsive design
 
 ## 🛠️ Tech Stack
 
 ### Core Technologies
-- **LiveKit** - WebRTC for real-time audio communication
-- **Web Speech API** - Browser-native speech recognition (STT)
-- **Chrome Translation API** - On-device translation (with Prompt API fallback)
-- **Web Speech Synthesis** - Browser-native text-to-speech (TTS)
+
+- **LiveKit** - WebRTC for real-time audio communication (the audio highway)
+- **Web Speech API** - Browser-native speech recognition (STT) – because robots need ears too
+- **Chrome Translation API** - On-device translation (with Prompt API fallback) – privacy's best friend
+- **Web Speech Synthesis** - Browser-native text-to-speech (TTS) – making AI sound less robotic
 
 ### Frontend
+
 - **Next.js 15** - React framework with App Router
 - **React 19** - UI library
 - **TypeScript** - Type safety
@@ -41,10 +78,12 @@ All AI processing happens **on-device** in your browser - no cloud APIs, no exte
 - **LiveKit Client SDK** - WebRTC client
 
 ### Backend (Minimal)
+
 - **Next.js API Routes** - JWT token generation for LiveKit
 - **livekit-server-sdk** - Server-side token signing
 
 ### State Management
+
 - **React Context API** - Global state
 - **Custom hooks** - Modular logic (useSTT, useTranslation, useTTS, etc.)
 
@@ -61,6 +100,7 @@ All AI processing happens **on-device** in your browser - no cloud APIs, no exte
 BabelGopher requires Chrome Canary with experimental AI features enabled.
 
 **Quick Setup:**
+
 1. Install [Chrome Canary](https://www.google.com/chrome/canary/)
 2. Open `chrome://flags`
 3. Enable these flags:
@@ -155,21 +195,25 @@ Your Microphone
 ### Component Flow
 
 1. **LiveKit Connection** (`useLiveKit.ts`)
+
    - Connects to LiveKit room with JWT token
    - Publishes local audio track
    - Receives remote participants' audio
 
 2. **Speech-to-Text** (`useSTT.ts`)
+
    - Captures microphone input via Web Speech API
    - Continuous recognition with auto-restart
    - Emits final transcription results
 
 3. **Translation** (`useTranslation.ts`)
+
    - Receives transcription from STT
    - Translates to user's target language
    - Uses Chrome Translation API (or Prompt API fallback)
 
 4. **Text-to-Speech** (`useTTS.ts`)
+
    - Speaks translated text
    - Uses Web Speech Synthesis
    - Auto-selects voice for target language
@@ -197,20 +241,24 @@ Your Microphone
 ### Current Limitations
 
 1. **Local Participant Only**
+
    - Only your own speech is transcribed
    - Web Speech API limitation (requires getUserMedia microphone)
    - **Workaround**: Each participant transcribes their own speech (future: sync via LiveKit data channel)
 
 2. **Browser Requirements**
+
    - Requires Chrome Canary or Edge Dev
    - Chrome Built-in AI features are experimental
    - Not available in Firefox or Safari
 
 3. **Language Detection**
+
    - STT language currently hardcoded to English
    - **Planned**: Auto-detect speaking language
 
 4. **Performance**
+
    - CPU-intensive on-device processing
    - Recommended: 8GB+ RAM
    - Best with 2-4 participants
@@ -229,33 +277,6 @@ Your Microphone
 - **Mobile App** - React Native implementation
 - **Export History** - Save conversation transcripts
 
-## 🧪 Testing
-
-```bash
-# Type check
-cd apps/web
-pnpm tsc
-
-# Build check
-pnpm build
-
-### Deployment Strategy
-
-**Backend (Go Server):**
-- Platform: Google Cloud Run
-- Build: Multi-stage Docker image (golang:1.24-alpine → distroless)
-- Deployment: Automated via GitHub Actions (configured in Story 1.3)
-- Health Check: `/health` endpoint returns `{"status":"healthy"}`
-
-**Frontend (Next.js):**
-- Platform: Vercel
-- Build: Next.js static export or SSR
-- Deployment: Automated via Vercel GitHub integration
-
-**CI/CD Pipelines:**
-- Backend tests run automatically on push to `main`/`develop`
-- Frontend builds validate on pull requests
-- Deployment workflows available in `.github/workflows/`
 
 ## API Documentation
 
@@ -271,9 +292,10 @@ Generate a LiveKit access token for joining a room.
   "user_identity": "unique-user-id",
   "room_name": "room-name"
 }
-```
+````
 
 **Success Response (200 OK):**
+
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -281,10 +303,12 @@ Generate a LiveKit access token for joining a room.
 ```
 
 **Error Responses:**
+
 - `400 Bad Request`: Missing required fields
 - `500 Internal Server Error`: Token generation failed
 
 **Example:**
+
 ```bash
 curl -X POST http://localhost:8080/auth-livekit-token \
   -H "Content-Type: application/json" \
@@ -300,6 +324,7 @@ curl -X POST http://localhost:8080/auth-livekit-token \
 Check server health status.
 
 **Success Response (200 OK):**
+
 ```json
 {
   "status": "healthy"
@@ -310,78 +335,37 @@ Check server health status.
 
 Required for backend operation:
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `LIVEKIT_API_KEY` | LiveKit Cloud API key | `APIxxxxxxx` |
-| `LIVEKIT_API_SECRET` | LiveKit Cloud API secret | `xxxxxxxxxxxxx` |
-| `LIVEKIT_URL` | LiveKit WebSocket URL | `wss://project.livekit.cloud` |
-| `PORT` | Server port (optional) | `8080` |
+| Variable             | Description              | Example                       |
+| -------------------- | ------------------------ | ----------------------------- |
+| `LIVEKIT_API_KEY`    | LiveKit Cloud API key    | `APIxxxxxxx`                  |
+| `LIVEKIT_API_SECRET` | LiveKit Cloud API secret | `xxxxxxxxxxxxx`               |
+| `LIVEKIT_URL`        | LiveKit WebSocket URL    | `wss://project.livekit.cloud` |
+| `PORT`               | Server port (optional)   | `8080`                        |
 
 Get your LiveKit credentials from: https://cloud.livekit.io/
 
-## Features Implemented
+## 🧪 Testing
 
-**Phase 1 - Basic Setup & LiveKit Connection:**
-- Monorepo structure with pnpm workspaces
-- Go authentication server with LiveKit token generation
-- Next.js frontend with Tailwind CSS
-- LiveKit room connection (audio-only)
-- Multi-participant support
-- Real-time participant list
+**Quick Checks:**
 
-**Phase 2 - Real-Time Transcription:**
-- Chrome Built-in AI Speech-to-Text integration
-- Real-time audio chunking and transcription
-- Multi-participant transcription support
-- Live transcription display with timestamps
-- Chrome AI availability detection and setup instructions
-- Comprehensive PoC test suite for validation
+```bash
+# Type check
+cd apps/web
+pnpm tsc
 
-**Phase 2 - Real-Time Translation:**
-- Chrome AI Translation integration (Translator API + Prompt API fallback)
-- Automatic translation of transcriptions
-- Support for 10 languages (English, Korean, Japanese, Chinese, Spanish, French, German, Italian, Portuguese, Russian)
-- Language selection with persistent preferences
-- Debounced translation for performance optimization
-- Original and translated text display side-by-side
-- Translation latency tracking and optimization
-
-**Phase 2 - Text-to-Speech (TTS):**
-- Web Speech API integration for translated audio output
-- 5-tier voice selection system (cloud → Google → exact → base → fallback)
-- Multi-layered echo cancellation to prevent feedback
-- Cancel-and-replace queuing for smooth audio playback
-- User-adjustable TTS settings (volume, speed, pitch)
-- Settings persistence via localStorage
-- TTS enable/disable toggle for user control
-
-**Phase 3 - Translation Controls & Subtitle UI:**
-- Language selector in lobby page (10 languages)
-- Language parameter passed via URL to conference view
-- Toggleable subtitle panel with real-time display
-- Side-by-side original and translated text display
-- Speaker identification with color coding (5 colors)
-- Speaking indicator ('...') appears before transcription
-- Auto-scroll with manual scroll pause/resume
-- WCAG AA compliant (4.5:1 contrast, keyboard accessible, ARIA labels)
-- Responsive design (desktop sidebar, mobile bottom overlay)
-- TTS and subtitle independent toggles
-
-**Phase 3+ - Coming Soon:**
-- Video track support (currently audio-only)
-- Mobile app (React Native)
-- Conversation history export
-- Custom vocabulary support
-
-## Testing
+# Build check
+pnpm build
+```
 
 **Backend Tests:**
+
 ```bash
 cd apps/server
 go test -v ./...
 ```
 
 **Frontend Manual Testing:**
+
 1. Start both backend and frontend servers (see Development section)
 2. Open http://localhost:3000
 3. Enter name: "Alice", room: "test-room"
@@ -391,6 +375,7 @@ go test -v ./...
 7. Verify both participants see each other in the participant list
 
 **Testing Checklist:**
+
 - Health endpoint: `curl http://localhost:8080/health`
 - Token endpoint: `curl -X POST http://localhost:8080/auth-livekit-token -H "Content-Type: application/json" -d '{"user_identity":"test","room_name":"test"}'`
 - Frontend lobby form validation
@@ -398,6 +383,7 @@ go test -v ./...
 - Multi-participant room join/leave
 
 **STT Testing (Chrome Canary Required):**
+
 1. Follow Chrome AI Setup instructions above
 2. Join a room with 2+ participants
 3. Verify "Chrome AI Available" status shows in room
@@ -408,6 +394,7 @@ go test -v ./...
 8. Test "Clear Transcriptions" button
 
 **Translation Testing (Chrome Canary Required):**
+
 1. Follow Chrome AI Setup instructions above
 2. Join a room and start speaking (or have another participant speak)
 3. Verify "Translation Available" status shows in room
@@ -420,6 +407,7 @@ go test -v ./...
 10. Verify language preference persists after page reload
 
 **PoC Test Suite:**
+
 - See `apps/web/src/poc/README.md` for detailed PoC testing instructions
 - Run automated test suite to validate Chrome AI integration
 - Generate test reports for debugging
